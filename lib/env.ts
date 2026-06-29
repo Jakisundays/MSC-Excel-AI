@@ -1,0 +1,53 @@
+import "server-only";
+
+/**
+ * Acceso centralizado a variables de entorno del SERVIDOR.
+ * No importar desde componentes cliente.
+ */
+function required(name: string, value: string | undefined): string {
+  if (!value) {
+    // No tiramos en build para no romper `next build` sin envs;
+    // fallamos en runtime cuando realmente se usa.
+    console.warn(`[env] Falta la variable ${name}`);
+  }
+  return value ?? "";
+}
+
+export const env = {
+  POCKETBASE_URL: required(
+    "POCKETBASE_URL",
+    process.env.POCKETBASE_URL || process.env.NEXT_PUBLIC_POCKETBASE_URL,
+  ),
+  ORCHESTRATOR_URL: required(
+    "NEXT_PUBLIC_ORCHESTRATOR_URL",
+    process.env.NEXT_PUBLIC_ORCHESTRATOR_URL,
+  ),
+  APP_URL: process.env.APP_URL || "http://localhost:3000",
+  UPLOAD_TICKET_SECRET: required(
+    "UPLOAD_TICKET_SECRET",
+    process.env.UPLOAD_TICKET_SECRET,
+  ),
+  ALLOWED_EMAIL_DOMAINS: process.env.ALLOWED_EMAIL_DOMAINS || "",
+  ALLOWED_EMAILS: process.env.ALLOWED_EMAILS || "",
+  IS_PROD: process.env.NODE_ENV === "production",
+};
+
+/**
+ * Allowlist de acceso. Si no hay dominios ni emails configurados,
+ * se permite a cualquier cuenta de Google (útil mientras no tengas la lista).
+ */
+export function isEmailAllowed(email: string | undefined | null): boolean {
+  if (!email) return false;
+  const domains = env.ALLOWED_EMAIL_DOMAINS.split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+  const emails = env.ALLOWED_EMAILS.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (domains.length === 0 && emails.length === 0) return true;
+
+  const lower = email.toLowerCase();
+  const domain = lower.split("@")[1] ?? "";
+  return emails.includes(lower) || domains.includes(domain);
+}
