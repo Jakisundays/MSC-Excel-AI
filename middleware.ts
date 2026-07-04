@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEV_PREVIEW } from "@/lib/preview";
+import { PB_COOKIE } from "@/lib/constants";
 
 /**
  * Gate barato en el edge: revisa presencia + expiración del token PB
@@ -7,7 +8,6 @@ import { DEV_PREVIEW } from "@/lib/preview";
  * ocurre en /api/upload-ticket (authRefresh) y en los server components
  * al consultar datos.
  */
-const PB_COOKIE = "pb_auth";
 
 function decodeExp(raw?: string): number | null {
   if (!raw) return null;

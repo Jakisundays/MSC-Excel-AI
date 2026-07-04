@@ -3,8 +3,9 @@ import "server-only";
 import PocketBase from "pocketbase";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
+import { PB_COOKIE } from "@/lib/constants";
 
-export const PB_COOKIE = "pb_auth";
+export { PB_COOKIE };
 
 /**
  * Crea una instancia NUEVA de PocketBase por request (regla SSR:

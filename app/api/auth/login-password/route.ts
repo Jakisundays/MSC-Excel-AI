@@ -6,9 +6,17 @@ import {
   serializeAuth,
   authCookieOptions,
 } from "@/lib/pocketbase/server";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 /** Login con correo + contraseña (alternativa a Google OAuth). */
 export async function POST(req: NextRequest) {
+  if (!checkRateLimit(`login-password:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Esperá un minuto e intentá de nuevo." },
+      { status: 429 },
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email : "";
   const password = typeof body?.password === "string" ? body.password : "";

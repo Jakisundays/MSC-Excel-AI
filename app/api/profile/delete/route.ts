@@ -3,17 +3,26 @@ import PocketBase, { ClientResponseError } from "pocketbase";
 
 import { env } from "@/lib/env";
 import { getServerPb, PB_COOKIE } from "@/lib/pocketbase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Elimina permanentemente la cuenta del usuario autenticado. Exige la
  * contraseña actual como confirmación (defensa extra para una acción
  * destructiva e irreversible). El relation `user` en `submissions` tiene
- * cascadeDelete, así que sus solicitudes se borran junto con la cuenta.
+ * cascadeDelete (a confirmar en pb_migrations/, ver docs/README de
+ * migraciones), así que sus solicitudes se borran junto con la cuenta.
  */
 export async function POST(req: NextRequest) {
   const pb = await getServerPb();
   if (!pb.authStore.isValid) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(`profile-delete:${pb.authStore.record!.id}`, 5, 60_000)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Esperá un minuto e intentá de nuevo." },
+      { status: 429 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));

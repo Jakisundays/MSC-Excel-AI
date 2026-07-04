@@ -31,6 +31,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Estado inválido" }, { status: 400 });
   }
 
+  // Defensa en profundidad: no confiar solo en la API rule de PocketBase
+  // (no versionada — ver pb_migrations/) para bloquear que un usuario
+  // modifique una solicitud ajena. Mismo patrón que lib/submissions.ts::getSubmission.
+  try {
+    const existing = await pb.collection("submissions").getOne(id);
+    if (existing.user !== pb.authStore.record!.id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    }
+  } catch (e) {
+    const status = e instanceof ClientResponseError ? e.status : 500;
+    return NextResponse.json(
+      { error: "No se pudo actualizar la solicitud" },
+      { status: status === 404 ? 404 : 500 },
+    );
+  }
+
   try {
     const updated = await pb.collection("submissions").update(id, {
       status: body.status,

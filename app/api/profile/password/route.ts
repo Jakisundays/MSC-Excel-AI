@@ -7,6 +7,7 @@ import {
   serializeAuth,
   authCookieOptions,
 } from "@/lib/pocketbase/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 /**
  * Cambia la contraseña del usuario autenticado. PocketBase invalida el
@@ -17,6 +18,13 @@ export async function POST(req: NextRequest) {
   const pb = await getServerPb();
   if (!pb.authStore.isValid) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
+  if (!checkRateLimit(`profile-password:${pb.authStore.record!.id}`, 5, 60_000)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Esperá un minuto e intentá de nuevo." },
+      { status: 429 },
+    );
   }
 
   const body = await req.json().catch(() => ({}));

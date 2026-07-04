@@ -82,12 +82,11 @@ export async function listSubmissions(
   if (DEV_PREVIEW) return { items: MOCK, error: false };
 
   try {
-    const res = await getServerPb().then((pb) =>
-      pb.collection("submissions").getList(1, 200, {
-        sort: "-created",
-        filter: `user = "${userId}"`,
-      }),
-    );
+    const pb = await getServerPb();
+    const res = await pb.collection("submissions").getList(1, 200, {
+      sort: "-created",
+      filter: pb.filter("user = {:userId}", { userId }),
+    });
     return { items: res.items as unknown as SubmissionRecord[], error: false };
   } catch {
     return { items: [], error: true };
@@ -117,11 +116,10 @@ export async function countSubmissions(userId: string): Promise<number> {
   if (DEV_PREVIEW) return MOCK.length;
 
   try {
-    const res = await getServerPb().then((pb) =>
-      pb.collection("submissions").getList(1, 1, {
-        filter: `user = "${userId}"`,
-      }),
-    );
+    const pb = await getServerPb();
+    const res = await pb.collection("submissions").getList(1, 1, {
+      filter: pb.filter("user = {:userId}", { userId }),
+    });
     return res.totalItems;
   } catch {
     return 0;
