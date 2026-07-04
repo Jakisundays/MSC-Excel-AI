@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: MSC Excel AI — Webhook de cierre de procesamiento
+  version: "1.0.0"
+  description: |
+    Único endpoint de Next.js que escribe PocketBase para cerrar un
+    procesamiento (hop 2 del plan, ver
+    `verito/docs/procesamiento-async-webhook-plan.md` §4.2 y §8).
+
+    Lo llama **exclusivamente el orchestrator** (`verito/orchestrator`,
+    ver `result_forwarder.py`) después de normalizar el callback del AI
+    Excel Agent externo — nunca el navegador ni el proveedor directamente.
+    Next.js es el único servicio con credenciales de PocketBase.
+
+    Este documento es de referencia interna (Next.js no genera Swagger
+    automático como el orchestrator FastAPI, que sí lo expone en
+    `/docs` / `/openapi.json`). El contrato que hay que comunicarle al
+    **proveedor externo** es el otro hop: `POST /webhooks/ai-excel-agent`
+    en el orchestrator (ver `verito/docs/openapi.json`).
+servers:
+  - url: https://<host-de-produccion-next.js>
+    description: Producción (Vercel)
+  - url: http://localhost:3100
+    description: Desarrollo local
+paths:
+  /api/webhooks/processing-result:
+    post:
+      summary: Aplica el resultado (o error) de un procesamiento a la submission
+      description: |
+        Body `multipart/form-data`. Requiere firma HMAC-SHA256 válida y
+        reciente (ventana de 5 minutos) — ver plan §5. Es idempotente:
+        reenviar el mismo `(request_id, status)` sobre una submission ya
+        terminal responde 200 con `already_processed: true` sin reescribir
+        el archivo.
+      security:
+        - webhookHmac: []
+      parameters:
+        - name: X-Webhook-Timestamp
+          in: header
+          required: true
+          description: Unix timestamp (segundos) usado en la firma.
+          schema:
+            type: string
+            example: "1783000000"
+        - name: X-Webhook-Signature
+          in: header
+          required: true
+          description: >-
+            `sha256=<hex-hmac>` sobre `"{request_id}.{status}.{timestamp}"`,
+            firmado con `RESULT_WEBHOOK_SECRET`.
+          schema:
+            type: string
+            example: "sha256=3b1f...c9"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [request_id, status]
+              properties:
+                request_id:
+                  type: string
+                  description: >-
+                    `orchestrator_request_id` de la submission a cerrar
+                    (id de correlación, no el id de PocketBase).
+                status:
+                  type: string
+                  enum: [completed, failed]
+                result_file:
+                  type: string
+                  format: binary
+                  description: Requerido si `status=completed`.
+                error_message:
+                  type: string
+                  description: Requerido si `status=failed`.
+                processing_started_at:
+                  type: string
+                  format: date-time
+                  description: >-
+                    Opcional. Si la submission ya tiene el suyo, se
+                    conserva ese (no se pisa).
+                ai_agent_job_id:
+                  type: string
+                  description: Opcional, trazabilidad hacia el proveedor externo.
+      responses:
+        "200":
+          description: Procesado (primera vez o reintento idempotente).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  submission_id:
+                    type: string
+                  already_processed:
+                    type: boolean
+              examples:
+                nuevo:
+                  value: { ok: true, submission_id: "9q2n0f8k3j1x7ab", already_processed: false }
+                reintento:
+                  value: { ok: true, submission_id: "9q2n0f8k3j1x7ab", already_processed: true }
+        "400":
+          description: >-
+            Payload malformado: falta `request_id`, `status` inválido,
+            falta `result_file` (si completed) o `error_message` (si
+            failed), o falla la escritura en PocketBase por dato inválido.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Firma inválida o timestamp fuera de la ventana de 5 minutos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { ok: false, error: "invalid signature" }
+        "404":
+          description: No existe ninguna submission con ese `request_id`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { ok: false, error: "unknown request_id" }
+        "409":
+          description: >-
+            La submission ya está en un estado terminal **distinto** al
+            reportado (anomalía real, no un reintento normal) — no se
+            sobreescribe, requiere revisión manual.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example: { ok: false, error: "conflicting terminal state" }
+        "500":
+          description: >-
+            Falla inesperada (ej. PocketBase no responde). El orchestrator
+            debe tratar esto como reintentable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    webhookHmac:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: HMAC-SHA256, ver plan §5. No es un API key estático.
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string

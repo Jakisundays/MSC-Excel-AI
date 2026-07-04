@@ -21,8 +21,20 @@ Navegador ─(1) filtra Excel (SheetJS) ─(2) pide ticket a Next.js ─(3) sube
 ```bash
 npm install
 cp .env.example .env.local   # completar valores
-npm run dev                  # http://localhost:3000
+npm run dev                  # http://localhost:3100
 ```
+
+### Modo preview (sin PocketBase ni Google)
+
+Para navegar y mostrar toda la UI sin backend, poné en `.env.local`:
+
+```env
+NEXT_PUBLIC_DEV_PREVIEW=true
+```
+
+Esto **solo funciona con `next dev`** (nunca en producción): falsea la sesión,
+simula la subida al orchestrator y muestra datos de historial de ejemplo. Ideal
+para iterar la interfaz antes de tener la base de datos lista.
 
 Necesitás:
 1. Una instancia de **Pockethost** con Google OAuth y la colección `submissions` (ver [SETUP.md](SETUP.md)).
