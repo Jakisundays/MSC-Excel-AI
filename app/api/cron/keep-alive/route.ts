@@ -12,11 +12,13 @@ import { DEV_PREVIEW } from "@/lib/preview";
  * mientras está hibernada. Un ping periódico barato evita que llegue a
  * hibernar. Protegido con el mismo CRON_SECRET que mark-stale.
  *
- * Nota sobre Vercel Cron: en el plan Hobby, Vercel solo permite
- * ejecutar crons una vez por día sin importar el schedule declarado en
- * vercel.json. Si la cuenta es Hobby, usar en cambio un servicio externo
- * de uptime-ping (ej. cron-job.org, UptimeRobot) apuntando a esta misma
- * ruta con el header Authorization correspondiente, cada 5-10 minutos.
+ * Nota sobre Vercel Cron: en el plan Hobby, un schedule con más de una
+ * ejecución por día directamente bloquea el deploy (error real visto en
+ * 2026-07-04: "Hobby accounts are limited to daily cron jobs"), no lo
+ * degrada en silencio. Por eso esta ruta NO está en vercel.json — se
+ * pega manualmente con un servicio externo de uptime-ping (ej.
+ * cron-job.org, UptimeRobot) apuntando a esta misma ruta con el header
+ * Authorization correspondiente, cada 5-10 minutos.
  */
 export async function GET(req: NextRequest) {
   if (DEV_PREVIEW) {

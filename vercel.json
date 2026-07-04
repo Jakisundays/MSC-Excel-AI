@@ -2,11 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/mark-stale",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/cron/keep-alive",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
