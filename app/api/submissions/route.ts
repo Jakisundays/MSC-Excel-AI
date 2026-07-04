@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerPb } from "@/lib/pocketbase/server";
+import { DEV_PREVIEW } from "@/lib/preview";
 
 /**
- * Registra una solicitud en PocketBase (metadata, sin archivos).
- * Se llama desde el cliente DESPUÉS de subir al orchestrator, con el
- * resultado final (sent/failed). Payload chico → OK en Vercel.
+ * Registra una solicitud en PocketBase como `pending`, ANTES de llamar al
+ * orchestrator (fix de confiabilidad: si el navegador se cierra o pierde
+ * red durante la subida, la solicitud ya quedó registrada). El resultado
+ * del dispatch se aplica después vía PATCH /api/submissions/[id].
  */
 export async function POST(req: NextRequest) {
+  if (DEV_PREVIEW) {
+    return NextResponse.json({ id: "dev-submission" });
+  }
+
   const pb = await getServerPb();
   if (!pb.authStore.isValid) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
@@ -20,13 +26,15 @@ export async function POST(req: NextRequest) {
       user: record.id,
       file_a_name: body.file_a_name ?? "",
       file_b_name: body.file_b_name ?? "",
+      file_a_size: typeof body.file_a_size === "number" ? body.file_a_size : 0,
+      file_b_size: typeof body.file_b_size === "number" ? body.file_b_size : 0,
       sheet_a: body.sheet_a ?? "",
       sheet_b: body.sheet_b ?? "",
       reply_to: Array.isArray(body.reply_to) ? body.reply_to : [],
-      orchestrator_request_id: body.orchestrator_request_id ?? "",
-      attachments: Array.isArray(body.attachments) ? body.attachments : [],
-      status: body.status ?? "pending",
-      error: body.error ?? "",
+      orchestrator_request_id: "",
+      attachments: [],
+      status: "pending",
+      error: "",
     });
     return NextResponse.json({ id: created.id });
   } catch (e) {
