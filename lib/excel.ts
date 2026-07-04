@@ -1,16 +1,23 @@
-import * as XLSX from "xlsx";
-
 /**
  * Lógica de Excel del lado cliente (reemplaza lo que hacía el Streamlit
  * con openpyxl/pandas). Corre en el navegador con SheetJS, así los
  * archivos pesados NO pasan por Vercel.
+ *
+ * SheetJS se importa dinámicamente (no en el top-level) para que su
+ * bundle (~150kB) no engorde el JS inicial de /nueva-solicitud — se
+ * descarga recién cuando el usuario efectivamente elige un archivo
+ * (auditoría técnica 2026-07-03, performance/bundle size).
  */
+async function loadXLSX() {
+  return await import("xlsx");
+}
 
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /** Lee los nombres de hoja de un Excel (.xlsx/.xls). */
 export async function readSheetNames(file: File): Promise<string[]> {
+  const XLSX = await loadXLSX();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array", bookSheets: true });
   return wb.SheetNames ?? [];
@@ -33,6 +40,7 @@ export async function filterToSelectedSheet(
   file: File,
   sheetName: string,
 ): Promise<FilteredExcel> {
+  const XLSX = await loadXLSX();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
 
