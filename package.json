@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev -p ${PORT:-3100}",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "export:pb-schema": "node scripts/export-pb-schema.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -27,10 +30,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.20",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0"
   }
