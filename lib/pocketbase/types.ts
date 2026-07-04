@@ -45,6 +45,9 @@ export interface UserRecord {
   city?: string;
   birth_date?: string;
   address?: string;
+  /** Vacío si la cuenta todavía no eligió ningún plan. */
+  plan?: "esencial" | "profesional" | "corporativo" | "";
+  plan_selected_at?: string;
   created: string;
   updated: string;
 }

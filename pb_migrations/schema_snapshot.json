@@ -227,6 +227,34 @@
         "presentable": false,
         "system": false,
         "type": "autodate"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "select3713686397",
+        "maxSelect": 1,
+        "name": "plan",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "esencial",
+          "profesional",
+          "corporativo"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "date1853442470",
+        "max": "",
+        "min": "",
+        "name": "plan_selected_at",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
       }
     ],
     "indexes": [
@@ -234,7 +262,7 @@
       "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
     ],
     "created": "2026-06-30 19:24:55.474Z",
-    "updated": "2026-07-02 15:35:55.129Z",
+    "updated": "2026-07-04 06:49:26.224Z",
     "system": false,
     "authRule": "",
     "manageRule": null,

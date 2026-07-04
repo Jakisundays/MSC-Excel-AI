@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServerPb } from "@/lib/pocketbase/server";
 import { DEV_PREVIEW, FAKE_USER } from "@/lib/preview";
+import type { PlanKey } from "@/lib/billing";
 
 export interface Session {
   id: string;
@@ -14,6 +15,9 @@ export interface Session {
   birthDate: string;
   address: string;
   avatarUrl: string;
+  /** "" si la cuenta todavía no eligió ningún plan. */
+  plan: PlanKey | "";
+  planSelectedAt: string;
   created: string;
   updated: string;
 }
@@ -30,6 +34,8 @@ export async function getSession(): Promise<Session | null> {
       birthDate: "",
       address: "",
       avatarUrl: "",
+      plan: "",
+      planSelectedAt: "",
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
     };
@@ -53,6 +59,8 @@ export async function getSession(): Promise<Session | null> {
     birthDate: (r.birth_date as string) ?? "",
     address: (r.address as string) ?? "",
     avatarUrl: avatar ? pb.files.getURL(r, avatar) : "",
+    plan: ((r.plan as string) || "") as PlanKey | "",
+    planSelectedAt: (r.plan_selected_at as string) ?? "",
     created: (r.created as string) ?? "",
     updated: (r.updated as string) ?? "",
   };
