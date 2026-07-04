@@ -1,4 +1,4 @@
-/** Duración legible a partir de milisegundos (ej. "42m", "3.2h", "1.5d"). */
+/** Duracion legible a partir de milisegundos (ej. "42m", "3.2h", "1.5d"). */
 export function formatDuration(ms: number): string {
   if (ms <= 0) return "0m";
   const minutes = ms / 60_000;
@@ -35,9 +35,27 @@ const D = new Intl.DateTimeFormat("es-AR", {
   timeZone: TIME_ZONE,
 });
 
+// Node (SSR) y el motor del navegador formatean "a. m." / "p. m." con un
+// caracter de espacio distinto para es-AR (confirmado corriendo el mismo
+// Intl.DateTimeFormat en Node vs. en el navegador): mismo texto visible,
+// distinto contenido real del nodo de texto, asi que React marca un
+// hydration mismatch en cada render de components/submissions-table.tsx.
+// Se normaliza reemplazando por codigo (String.fromCharCode), no con el
+// caracter pegado literalmente en el fuente, para que el reemplazo sea
+// inequivoco: 160 = NBSP, 8199 = figure space, 8201 = thin space,
+// 8239 = narrow NBSP, 12288 = ideographic space.
+const EXOTIC_SPACE_CODES = [160, 8199, 8201, 8239, 12288];
+const EXOTIC_SPACES_PATTERN =
+  "[" + EXOTIC_SPACE_CODES.map((code) => String.fromCharCode(code)).join("") + "]";
+const EXOTIC_SPACES = new RegExp(EXOTIC_SPACES_PATTERN, "g");
+
+function normalizeSpaces(value: string): string {
+  return value.replace(EXOTIC_SPACES, " ");
+}
+
 export function formatDateTime(iso: string): string {
   try {
-    return DT.format(new Date(iso));
+    return normalizeSpaces(DT.format(new Date(iso)));
   } catch {
     return iso;
   }
@@ -55,7 +73,7 @@ export function relativeDay(iso: string): string {
     );
     if (days <= 0) return "hoy";
     if (days === 1) return "ayer";
-    return D.format(d);
+    return normalizeSpaces(D.format(d));
   } catch {
     return iso;
   }

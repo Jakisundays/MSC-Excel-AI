@@ -52,7 +52,12 @@ export function SubmissionsTable({
               <TableRow
                 key={s.id}
                 onClick={() => goTo(s.id)}
-                className="hover:bg-muted/50 cursor-pointer"
+                role="link"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") goTo(s.id);
+                }}
+                className="hover:bg-muted/50 focus-visible:bg-muted/50 cursor-pointer focus-visible:outline-none"
               >
                 <TableCell className="text-muted-foreground font-mono text-xs tabular-nums">
                   {formatDateTime(s.created)}

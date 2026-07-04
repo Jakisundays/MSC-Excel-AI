@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       error: "",
     });
     return NextResponse.json({ id: created.id });
-  } catch (e) {
+  } catch {
     return NextResponse.json(
       { error: "No se pudo guardar la solicitud" },
       { status: 500 },

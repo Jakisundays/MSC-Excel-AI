@@ -2,6 +2,19 @@ import { NextResponse } from "next/server";
 import PocketBase from "pocketbase";
 import { env } from "@/lib/env";
 
+type OAuthProvider = {
+  name: string;
+  authURL: string;
+  codeVerifier: string;
+  state: string;
+};
+
+/** Forma de listAuthMethods() según la versión del SDK/servidor de PocketBase. */
+type ListAuthMethodsResponse = {
+  oauth2?: { providers?: OAuthProvider[] };
+  authProviders?: OAuthProvider[];
+};
+
 /**
  * Inicia el login con Google (OAuth2 authorization-code, ideal para SSR):
  * pide los providers a PocketBase, guarda codeVerifier+state en cookies
@@ -10,14 +23,12 @@ import { env } from "@/lib/env";
 export async function GET() {
   const pb = new PocketBase(env.POCKETBASE_URL);
 
-  const methods = await pb.collection("users").listAuthMethods();
+  const methods =
+    (await pb.collection("users").listAuthMethods()) as unknown as ListAuthMethodsResponse;
   // Compatibilidad entre versiones del SDK:
   // nuevo: methods.oauth2.providers ; viejo: methods.authProviders
-  const providers =
-    (methods as any).oauth2?.providers ??
-    (methods as any).authProviders ??
-    [];
-  const google = providers.find((p: any) => p.name === "google");
+  const providers = methods.oauth2?.providers ?? methods.authProviders ?? [];
+  const google = providers.find((p) => p.name === "google");
 
   if (!google) {
     return NextResponse.json(
