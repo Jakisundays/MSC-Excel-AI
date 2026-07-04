@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, FileSpreadsheet, LogOut } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { SETTINGS_NAV } from "./nav-items";
 import { cn, initials } from "@/lib/utils";
@@ -23,8 +24,8 @@ export function SettingsSidebar({
   return (
     <aside className="bg-sidebar sticky top-0 hidden h-screen w-20 shrink-0 flex-col gap-6 overflow-y-auto border-r px-3 py-6 md:flex lg:w-72 lg:gap-7 lg:px-5">
       <Link href="/dashboard" className="flex items-center gap-2.5 px-1 lg:px-2">
-        <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full">
-          <FileSpreadsheet className="size-4" />
+        <div className="bg-brand-panel flex size-8 shrink-0 items-center justify-center rounded-full">
+          <LogoMark />
         </div>
         <span className="hidden text-[15px] font-medium tracking-tight lg:inline">
           Mi cuenta

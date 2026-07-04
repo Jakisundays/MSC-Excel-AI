@@ -17,6 +17,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { LogoMark } from "@/components/logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import {
   InputGroup,
@@ -65,8 +66,8 @@ const BENEFITS = [
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
-        <FileSpreadsheet className="size-4" aria-hidden />
+      <div className="bg-brand-panel flex size-8 shrink-0 items-center justify-center rounded-lg">
+        <LogoMark />
       </div>
       <div className="leading-tight">
         <div className={compact ? "text-sm font-semibold" : "text-[15px] font-semibold"}>
@@ -190,8 +191,8 @@ export function LoginView({ oauthError }: { oauthError: ErrorKind | null }) {
 
         <div className="w-full max-w-sm">
           <div className="mb-7 flex items-center gap-2.5 md:hidden">
-            <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
-              <FileSpreadsheet className="size-4" aria-hidden />
+            <div className="bg-brand-panel flex size-8 shrink-0 items-center justify-center rounded-lg">
+              <LogoMark />
             </div>
             <div className="leading-tight">
               <div className="text-sm font-semibold">MSC Excel AI</div>

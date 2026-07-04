@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   ChevronsUpDown,
   CircleUserRound,
-  FileSpreadsheet,
   History,
   LayoutDashboard,
   LogOut,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,8 +58,8 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-md">
-                  <FileSpreadsheet className="size-4" />
+                <div className="bg-brand-panel flex aspect-square size-8 items-center justify-center rounded-md">
+                  <LogoMark />
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-medium">
