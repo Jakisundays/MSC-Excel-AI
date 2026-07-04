@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { DEV_PREVIEW } from "@/lib/preview";
 
 /**
  * Gate barato en el edge: revisa presencia + expiración del token PB
@@ -28,6 +29,10 @@ function decodeExp(raw?: string): number | null {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Dev preview: sin gate de auth (solo en `next dev`).
+  if (DEV_PREVIEW) return NextResponse.next();
+
   const raw = req.cookies.get(PB_COOKIE)?.value;
   const exp = decodeExp(raw);
   const valid = exp !== null && exp * 1000 > Date.now();
@@ -41,7 +46,8 @@ export function middleware(req: NextRequest) {
   const isProtected =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/nueva-solicitud") ||
-    pathname.startsWith("/historial");
+    pathname.startsWith("/historial") ||
+    pathname.startsWith("/perfil");
 
   if (isProtected && !valid) {
     const res = NextResponse.redirect(new URL("/login", req.url));
@@ -58,5 +64,6 @@ export const config = {
     "/dashboard/:path*",
     "/nueva-solicitud/:path*",
     "/historial/:path*",
+    "/perfil/:path*",
   ],
 };
