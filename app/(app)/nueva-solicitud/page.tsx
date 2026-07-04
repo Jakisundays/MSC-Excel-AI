@@ -1,12 +1,9 @@
+import { getSession } from "@/lib/auth";
 import { NewRequestForm } from "@/components/NewRequestForm";
 
-export default function NuevaSolicitudPage() {
-  return (
-    <div>
-      <h1 className="mb-6 text-xl font-semibold tracking-tight">
-        Nueva solicitud
-      </h1>
-      <NewRequestForm />
-    </div>
-  );
+export const metadata = { title: "Nueva solicitud" };
+
+export default async function NuevaSolicitudPage() {
+  const session = await getSession();
+  return <NewRequestForm userEmail={session?.email ?? ""} />;
 }

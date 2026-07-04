@@ -30,6 +30,23 @@ export const env = {
   ALLOWED_EMAIL_DOMAINS: process.env.ALLOWED_EMAIL_DOMAINS || "",
   ALLOWED_EMAILS: process.env.ALLOWED_EMAILS || "",
   IS_PROD: process.env.NODE_ENV === "production",
+  POCKETBASE_ADMIN_EMAIL: required(
+    "POCKETBASE_ADMIN_EMAIL",
+    process.env.POCKETBASE_ADMIN_EMAIL,
+  ),
+  POCKETBASE_ADMIN_PASSWORD: required(
+    "POCKETBASE_ADMIN_PASSWORD",
+    process.env.POCKETBASE_ADMIN_PASSWORD,
+  ),
+  // Secreto del webhook de cierre (hop orchestrator -> Next.js). DISTINTO
+  // de UPLOAD_TICKET_SECRET: server-to-server, larga duración.
+  RESULT_WEBHOOK_SECRET: required(
+    "RESULT_WEBHOOK_SECRET",
+    process.env.RESULT_WEBHOOK_SECRET,
+  ),
+  // Autoriza el cron job de SLA (app/api/cron/mark-stale). Vacío = ruta
+  // deshabilitada (fail-closed) hasta configurarlo.
+  CRON_SECRET: process.env.CRON_SECRET || "",
 };
 
 /**

@@ -7,6 +7,7 @@ import {
 } from "@/lib/pocketbase/server";
 import { signUploadTicket } from "@/lib/ticket";
 import { env } from "@/lib/env";
+import { DEV_PREVIEW, FAKE_USER } from "@/lib/preview";
 
 /**
  * Emite un upload-ticket de corta duración tras validar la sesión
@@ -14,6 +15,14 @@ import { env } from "@/lib/env";
  * Payload chico (sin archivos) → seguro bajo el límite de Vercel.
  */
 export async function POST() {
+  if (DEV_PREVIEW) {
+    const ticket = await signUploadTicket({
+      sub: FAKE_USER.id,
+      email: FAKE_USER.email,
+    });
+    return NextResponse.json({ ticket, orchestratorUrl: env.ORCHESTRATOR_URL });
+  }
+
   const pb = await getServerPb();
 
   if (!pb.authStore.isValid) {
