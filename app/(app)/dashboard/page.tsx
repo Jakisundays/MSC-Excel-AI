@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, FilePlus2 } from "lucide-react";
+import { ArrowRight, FilePlus2, TriangleAlert } from "lucide-react";
 
 import { getSession } from "@/lib/auth";
 import { listSubmissions } from "@/lib/submissions";
@@ -28,9 +28,27 @@ function pctDelta(curr: number, prev: number): number | null {
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const { items } = session
+  const { items, error } = session
     ? await listSubmissions(session.id)
-    : { items: [] as SubmissionRecord[] };
+    : { items: [] as SubmissionRecord[], error: false };
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div>
+          <h1 className="text-xl font-medium tracking-tight">Resumen</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Estado de tus solicitudes, hoy.
+          </p>
+        </div>
+        <EmptyState
+          icon={TriangleAlert}
+          title="No se pudo cargar tu actividad"
+          description="Hubo un problema al conectar con PocketBase. Probá recargar la página en un momento."
+        />
+      </div>
+    );
+  }
 
   const now = new Date();
   const lastMonthRef = new Date(now.getFullYear(), now.getMonth() - 1, 1);
