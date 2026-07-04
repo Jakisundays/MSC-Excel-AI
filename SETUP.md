@@ -67,12 +67,17 @@ afectan — un usuario nunca puede auto-marcarse `completed` vía la API públic
 ### 1.3 Google OAuth en `users`
 
 1. En **Google Cloud Console** → APIs & Services → Credentials → *Create OAuth client ID* (tipo *Web application*).
-2. **Authorized redirect URIs**: agregá el redirect de tu instancia de PocketBase:
-   `{POCKETBASE_URL}/api/oauth2-redirect`
-3. En PocketBase → colección `users` → *Options* → **OAuth2** → habilitar **Google** y pegar Client ID + Secret.
+2. **Authorized redirect URIs**: **NO** es el redirect de PocketBase (`/api/oauth2-redirect`) — este frontend usa su propio callback
+   (`app/api/auth/login/route.ts` arma `redirectUrl = \`${APP_URL}/api/auth/callback\`` y se lo pasa directo a Google,
+   sin pasar por el endpoint nativo de PocketBase). Agregá **una entrada por cada `APP_URL` que uses**:
+   - Local: `http://localhost:3100/api/auth/callback` (o el puerto que uses)
+   - Producción: `https://tu-dominio.vercel.app/api/auth/callback`
 
-> El frontend usa el flujo authorization-code y su propio callback
-> (`/api/auth/callback`); PocketBase hace de intermediario con Google.
+   Las dos pueden convivir en la misma lista de Google sin problema. Si te da
+   `Error 400: redirect_uri_mismatch`, es casi siempre esto: el valor de
+   `APP_URL` en el `.env` que estés usando no coincide (exacto, sin barra
+   final) con ninguna de las URIs autorizadas acá.
+3. En PocketBase → colección `users` → *Options* → **OAuth2** → habilitar **Google** y pegar Client ID + Secret.
 
 ---
 
