@@ -1,0 +1,43 @@
+name: CI (MSC Excel AI)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Placeholders solo para que el build no dependa de secretos reales.
+      # Ninguna ruta estática toca PocketBase en build time (todo lo que
+      # usa estas envs es server component/route handler dinámico).
+      POCKETBASE_URL: https://example.invalid
+      NEXT_PUBLIC_POCKETBASE_URL: https://example.invalid
+      NEXT_PUBLIC_ORCHESTRATOR_URL: https://example.invalid
+      UPLOAD_TICKET_SECRET: ci-placeholder-secret
+      RESULT_WEBHOOK_SECRET: ci-placeholder-secret
+      POCKETBASE_ADMIN_EMAIL: ci@example.invalid
+      POCKETBASE_ADMIN_PASSWORD: ci-placeholder-password
+      CRON_SECRET: ci-placeholder-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
