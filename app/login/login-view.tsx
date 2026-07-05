@@ -31,6 +31,7 @@ type ErrorKind =
   | "auth"
   | "not_allowed"
   | "invalid_credentials"
+  | "rate_limited"
   | "network";
 
 const ERROR_COPY: Record<ErrorKind, { title: string; detail: string }> = {
@@ -51,11 +52,23 @@ const ERROR_COPY: Record<ErrorKind, { title: string; detail: string }> = {
     title: "Correo o contraseña incorrectos.",
     detail: "Verificá tus datos e intentá de nuevo.",
   },
+  rate_limited: {
+    title: "Demasiados intentos.",
+    detail: "Esperá un minuto e intentá de nuevo.",
+  },
   network: {
     title: "No pudimos conectarnos.",
     detail: "Revisá tu conexión a internet e intentá de nuevo.",
   },
 };
+
+/** `data.error` viene del servidor sin garantía estática de que sea una
+ * clave conocida (ej. un código nuevo agregado del lado de una ruta sin
+ * actualizar este mapa) -- nunca indexar ERROR_COPY directo con un valor
+ * no validado, cae a "network" en vez de romper el render. */
+function errorCopyFor(kind: ErrorKind): { title: string; detail: string } {
+  return ERROR_COPY[kind] ?? ERROR_COPY.network;
+}
 
 const BENEFITS = [
   { icon: FileSpreadsheet, label: "Extracción automática de datos" },
@@ -231,9 +244,9 @@ export function LoginView({ oauthError }: { oauthError: ErrorKind | null }) {
                 >
                   <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                   <div>
-                    <div className="font-medium">{ERROR_COPY[error].title}</div>
+                    <div className="font-medium">{errorCopyFor(error).title}</div>
                     <div className="text-destructive/80 mt-0.5 text-xs">
-                      {ERROR_COPY[error].detail}
+                      {errorCopyFor(error).detail}
                     </div>
                   </div>
                 </div>

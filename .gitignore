@@ -29,3 +29,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# playwright (tests/e2e/.auth contiene un token de sesión real -- nunca commitear)
+/test-results/
+/playwright-report/
+/blob-report/
+tests/e2e/.auth/

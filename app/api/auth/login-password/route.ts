@@ -11,10 +11,10 @@ import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 /** Login con correo + contraseña (alternativa a Google OAuth). */
 export async function POST(req: NextRequest) {
   if (!checkRateLimit(`login-password:${clientIp(req)}`, 10, 60_000)) {
-    return NextResponse.json(
-      { error: "Demasiados intentos. Esperá un minuto e intentá de nuevo." },
-      { status: 429 },
-    );
+    // Código corto (no una oración) -- consistente con el resto de las
+    // respuestas de esta ruta: el cliente (login-view.tsx) mapea estos
+    // códigos a copy en ERROR_COPY, no los muestra tal cual.
+    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
   const body = await req.json().catch(() => null);

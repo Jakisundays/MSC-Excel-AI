@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "export:pb-schema": "node scripts/export-pb-schema.mjs"
+    "export:pb-schema": "node scripts/export-pb-schema.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -38,6 +42,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^15.5.20",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.6"
   }
 }

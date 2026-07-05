@@ -130,8 +130,17 @@ export async function POST(req: NextRequest) {
   if (status === "completed") {
     payload.result_file = resultFile;
     payload.result_file_size = resultFile instanceof File ? resultFile.size : 0;
+    // Limpia un `error` colgado de un intento anterior (ej. la submission
+    // se reseteó a mano a "processing" para reintentar) -- un cierre
+    // exitoso no debería dejar visible el error de un intento previo.
+    payload.error = "";
   } else {
     payload.error = errorMessage;
+    // Mismo criterio a la inversa: si un intento anterior había llegado a
+    // completarse y se resetea para reintentar, un cierre fallido no debe
+    // dejar un result_file/tamaño de un resultado que ya no es válido.
+    payload.result_file = "";
+    payload.result_file_size = 0;
   }
 
   try {
