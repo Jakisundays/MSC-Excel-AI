@@ -8,10 +8,24 @@ import {
 import { signUploadTicket } from "@/lib/ticket";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW, FAKE_USER } from "@/lib/preview";
+import { getActiveCompanyContext } from "@/lib/auth";
+import { countCompanySubmissionsThisMonth } from "@/lib/submissions";
 
 /**
  * Emite un upload-ticket de corta duración tras validar la sesión
- * (authRefresh = validación autoritativa contra PocketBase).
+ * (authRefresh = validación autoritativa contra PocketBase) y, a partir de
+ * acá, también el estado de la empresa — este es el chokepoint real del
+ * gate B2B (ver docs/b2b-multi-tenant-plan.md, Sección 5, punto 1): todo lo
+ * demás (reglas de PocketBase, server components) es defensa en
+ * profundidad, no el enforcement principal.
+ *
+ * SUBSCRIPTION_GATE_MODE (env.ts) controla el rollout:
+ * - "off": no valida nada de empresa (estado pre-migración).
+ * - "log": valida y deja pasar igual, solo deja rastro en logs — default
+ *   seguro mientras se corre scripts/migrate-to-companies.mjs y se
+ *   confirma que ninguna cuenta real quede bloqueada por error.
+ * - "enforce": bloquea de verdad. No activar antes de correr el backfill.
+ *
  * Payload chico (sin archivos) → seguro bajo el límite de Vercel.
  */
 export async function POST() {
@@ -39,9 +53,23 @@ export async function POST() {
   }
 
   const record = pb.authStore.record!;
+
+  if (env.SUBSCRIPTION_GATE_MODE !== "off") {
+    const gate = await evaluateSubscriptionGate(record.id, (record.company as string) || "");
+    if (!gate.ok) {
+      if (env.SUBSCRIPTION_GATE_MODE === "enforce") {
+        return NextResponse.json({ error: gate.error, code: gate.code }, { status: gate.status });
+      }
+      console.warn(
+        `[subscription-gate:log] bloquearía a ${record.email} (${gate.code}): ${gate.error}`,
+      );
+    }
+  }
+
   const ticket = await signUploadTicket({
     sub: record.id,
     email: record.email as string,
+    companyId: (record.company as string) || undefined,
   });
 
   const res = NextResponse.json({
@@ -51,4 +79,52 @@ export async function POST() {
   // re-persistir la cookie con el token refrescado
   res.cookies.set(PB_COOKIE, serializeAuth(pb), authCookieOptions);
   return res;
+}
+
+type GateResult =
+  | { ok: true }
+  | { ok: false; status: number; code: string; error: string };
+
+async function evaluateSubscriptionGate(userId: string, companyId: string): Promise<GateResult> {
+  if (!companyId) {
+    return {
+      ok: false,
+      status: 403,
+      code: "NO_COMPANY",
+      error: "Tu cuenta no pertenece a ninguna empresa.",
+    };
+  }
+
+  const ctx = await getActiveCompanyContext(userId, companyId);
+
+  if (!ctx.membership || ctx.membership.status !== "active") {
+    return {
+      ok: false,
+      status: 403,
+      code: "MEMBERSHIP_SUSPENDED",
+      error: "Tu acceso a la empresa fue suspendido.",
+    };
+  }
+
+  if (!ctx.subscriptionActive || !ctx.subscription || !ctx.plan) {
+    return {
+      ok: false,
+      status: 402,
+      code: "SUBSCRIPTION_INACTIVE",
+      error: "La suscripción de tu empresa está vencida. Contactá a tu administrador.",
+    };
+  }
+
+  const limit = ctx.subscription.usage_limit_override ?? ctx.plan.max_comparisons_month;
+  const usedThisMonth = await countCompanySubmissionsThisMonth(ctx.company!.id);
+  if (usedThisMonth >= limit) {
+    return {
+      ok: false,
+      status: 402,
+      code: "USAGE_LIMIT_REACHED",
+      error: "Tu empresa alcanzó el límite mensual de comparaciones de su plan.",
+    };
+  }
+
+  return { ok: true };
 }

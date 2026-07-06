@@ -125,3 +125,26 @@ export async function countSubmissions(userId: string): Promise<number> {
     return 0;
   }
 }
+
+/** Comparaciones que la empresa ya usó en el mes calendario en curso (para el cupo pooled del plan). */
+export async function countCompanySubmissionsThisMonth(
+  companyId: string,
+): Promise<number> {
+  if (DEV_PREVIEW) return MOCK.length;
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  try {
+    const pb = await getServerPb();
+    const res = await pb.collection("submissions").getList(1, 1, {
+      filter: pb.filter("company = {:companyId} && created >= {:startOfMonth}", {
+        companyId,
+        startOfMonth,
+      }),
+    });
+    return res.totalItems;
+  } catch {
+    return 0;
+  }
+}

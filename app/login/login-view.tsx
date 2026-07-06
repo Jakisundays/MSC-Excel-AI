@@ -94,8 +94,17 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function LoginView({ oauthError }: { oauthError: ErrorKind | null }) {
+export function LoginView({
+  oauthError,
+  returnTo,
+}: {
+  oauthError: ErrorKind | null;
+  returnTo: string | null;
+}) {
   const router = useRouter();
+  const googleHref = returnTo
+    ? `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`
+    : "/api/auth/login";
 
   const [pending, setPending] = useState<"google" | "credentials" | null>(null);
   const [success, setSuccess] = useState(false);
@@ -142,7 +151,7 @@ export function LoginView({ oauthError }: { oauthError: ErrorKind | null }) {
       setFirstName(typeof data.name === "string" ? data.name : "");
       setSuccess(true);
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push(returnTo || "/dashboard");
         router.refresh();
       }, 550);
     } catch {
@@ -260,7 +269,7 @@ export function LoginView({ oauthError }: { oauthError: ErrorKind | null }) {
                 disabled={anyLoading}
               >
                 <a
-                  href="/api/auth/login"
+                  href={googleHref}
                   aria-disabled={anyLoading}
                   onClick={(e) => {
                     if (anyLoading) {

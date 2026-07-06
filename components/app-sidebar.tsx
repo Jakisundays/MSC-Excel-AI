@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Building2,
   ChevronsUpDown,
   CircleUserRound,
+  CreditCard,
   History,
   LayoutDashboard,
   LogOut,
@@ -27,6 +29,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -35,13 +38,47 @@ import {
 } from "@/components/ui/sidebar";
 import { initials } from "@/lib/utils";
 
-// "Equipo" se omite a propósito: la visibilidad es por usuario ("cada quien
-// lo suyo" — ver filter en lib/submissions.ts), un ítem de nav de equipo
-// implicaría datos compartidos que no existen.
+type NavItem = { title: string; href: string; icon: React.ComponentType };
+
+function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
+  return (
+    <SidebarMenu>
+      {items.map((item) => {
+        const active = pathname === item.href || pathname.startsWith(item.href + "/");
+        return (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton asChild isActive={active} tooltip={item.title} className="relative">
+              <Link href={item.href}>
+                {active && (
+                  <span
+                    className="bg-primary absolute top-1/2 left-0.5 h-4 w-[3px] -translate-y-1/2 rounded-full"
+                    aria-hidden
+                  />
+                )}
+                <item.icon />
+                <span>{item.title}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
 const NAV = [
   { title: "Resumen", href: "/dashboard", icon: LayoutDashboard },
   { title: "Nueva solicitud", href: "/nueva-solicitud", icon: Upload },
   { title: "Historial", href: "/historial", icon: History },
+];
+
+// "Equipo" es visible para cualquier miembro (lectura); "Facturación" solo
+// tiene sentido para quien puede gestionar el plan — el link igual se
+// muestra siempre (si no hay empresa todavía, la página resuelve el
+// onboarding) para no esconder la única puerta de entrada al flujo B2B.
+const COMPANY_NAV = [
+  { title: "Equipo", href: "/empresa/equipo", icon: Building2 },
+  { title: "Facturación", href: "/empresa/billing", icon: CreditCard },
 ];
 
 export function AppSidebar({
@@ -78,34 +115,14 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.title}
-                      className="relative"
-                    >
-                      <Link href={item.href}>
-                        {active && (
-                          <span
-                            className="bg-primary absolute top-1/2 left-0.5 h-4 w-[3px] -translate-y-1/2 rounded-full"
-                            aria-hidden
-                          />
-                        )}
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+            <NavItems items={NAV} pathname={pathname} />
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Empresa</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <NavItems items={COMPANY_NAV} pathname={pathname} />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

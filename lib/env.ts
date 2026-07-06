@@ -47,6 +47,23 @@ export const env = {
   // Autoriza el cron job de SLA (app/api/cron/mark-stale). Vacío = ruta
   // deshabilitada (fail-closed) hasta configurarlo.
   CRON_SECRET: process.env.CRON_SECRET || "",
+  // Rollout gradual del gate de suscripción B2B (Fase 5/6 del plan
+  // corporativo): "off" no valida nada (estado pre-migración), "log" valida
+  // y deja pasar igual pero deja rastro en logs (default seguro para
+  // detectar falsos positivos contra cuentas ya migradas), "enforce" bloquea
+  // de verdad. Nunca pasar a "enforce" antes de correr
+  // scripts/migrate-to-companies.mjs con 0 usuarios huérfanos.
+  SUBSCRIPTION_GATE_MODE: (process.env.SUBSCRIPTION_GATE_MODE ||
+    "log") as "off" | "log" | "enforce",
+  // SMTP propio para emails transaccionales (hoy solo invitaciones de
+  // empresa). Vacío = no se envía nada, solo se loguea (ver lib/mailer.ts) —
+  // no rompe el flujo de invitación si todavía no está configurado.
+  SMTP_HOST: process.env.SMTP_HOST || "",
+  SMTP_PORT: Number(process.env.SMTP_PORT || 587),
+  SMTP_SECURE: process.env.SMTP_SECURE === "true",
+  SMTP_USER: process.env.SMTP_USER || "",
+  SMTP_PASS: process.env.SMTP_PASS || "",
+  SMTP_FROM: process.env.SMTP_FROM || "",
 };
 
 /**

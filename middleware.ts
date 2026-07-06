@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DEV_PREVIEW } from "@/lib/preview";
 import { PB_COOKIE } from "@/lib/constants";
+import { isSafeReturnTo } from "@/lib/return-to";
 
 /**
  * Gate barato en el edge: revisa presencia + expiración del token PB
@@ -37,9 +38,12 @@ export function middleware(req: NextRequest) {
   const exp = decodeExp(raw);
   const valid = exp !== null && exp * 1000 > Date.now();
 
-  // Ya logueado y entrando a /login → al dashboard
+  // Ya logueado y entrando a /login → al returnTo (si vino de una
+  // invitación) o al dashboard.
   if (pathname === "/login" && valid) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    const returnTo = req.nextUrl.searchParams.get("returnTo");
+    const destination = isSafeReturnTo(returnTo) ? returnTo : "/dashboard";
+    return NextResponse.redirect(new URL(destination, req.url));
   }
 
   // Rutas protegidas sin sesión válida → login
@@ -47,7 +51,8 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/nueva-solicitud") ||
     pathname.startsWith("/historial") ||
-    pathname.startsWith("/perfil");
+    pathname.startsWith("/perfil") ||
+    pathname.startsWith("/empresa");
 
   if (isProtected && !valid) {
     const res = NextResponse.redirect(new URL("/login", req.url));
@@ -65,5 +70,6 @@ export const config = {
     "/nueva-solicitud/:path*",
     "/historial/:path*",
     "/perfil/:path*",
+    "/empresa/:path*",
   ],
 };

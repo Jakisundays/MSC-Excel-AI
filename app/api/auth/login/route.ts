@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import PocketBase from "pocketbase";
 import { env } from "@/lib/env";
+import { isSafeReturnTo } from "@/lib/return-to";
 
 type OAuthProvider = {
   name: string;
@@ -20,7 +21,9 @@ type ListAuthMethodsResponse = {
  * pide los providers a PocketBase, guarda codeVerifier+state en cookies
  * temporales y redirige a Google.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const returnTo = req.nextUrl.searchParams.get("returnTo");
+
   const pb = new PocketBase(env.POCKETBASE_URL);
 
   const methods =
@@ -51,5 +54,8 @@ export async function GET() {
   res.cookies.set("pb_oauth_verifier", google.codeVerifier, opts);
   res.cookies.set("pb_oauth_state", google.state, opts);
   res.cookies.set("pb_oauth_provider", google.name, opts);
+  if (isSafeReturnTo(returnTo)) {
+    res.cookies.set("pb_oauth_return_to", returnTo, opts);
+  }
   return res;
 }

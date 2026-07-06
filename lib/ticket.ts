@@ -11,9 +11,17 @@ import { env } from "@/lib/env";
 export async function signUploadTicket(claims: {
   sub: string;
   email: string;
+  /**
+   * Solo propagación de dato para que el webhook de cierre pueda etiquetar
+   * submissions.company sin volver a resolverlo — NO es un gate de
+   * seguridad: orchestrator/auth.py únicamente valida firma+exp y no
+   * consulta ninguna base de datos, así que nunca hay que asumir que este
+   * claim fue verificado contra el estado real de la suscripción.
+   */
+  companyId?: string;
 }): Promise<string> {
   const secret = new TextEncoder().encode(env.UPLOAD_TICKET_SECRET);
-  return new SignJWT({ email: claims.email })
+  return new SignJWT({ email: claims.email, companyId: claims.companyId })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)
     .setIssuedAt()

@@ -6,6 +6,7 @@ import {
   serializeAuth,
   authCookieOptions,
 } from "@/lib/pocketbase/server";
+import { isSafeReturnTo } from "@/lib/return-to";
 
 /** Callback del OAuth: intercambia el code, valida allowlist y setea la sesión. */
 export async function GET(req: NextRequest) {
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   const verifier = req.cookies.get("pb_oauth_verifier")?.value;
   const savedState = req.cookies.get("pb_oauth_state")?.value;
   const provider = req.cookies.get("pb_oauth_provider")?.value || "google";
+  const returnToCookie = req.cookies.get("pb_oauth_return_to")?.value;
 
   const fail = (reason: string) =>
     NextResponse.redirect(new URL(`/login?error=${reason}`, env.APP_URL));
@@ -44,11 +46,13 @@ export async function GET(req: NextRequest) {
     return fail("not_allowed");
   }
 
-  const res = NextResponse.redirect(new URL("/dashboard", env.APP_URL));
+  const destination = isSafeReturnTo(returnToCookie) ? returnToCookie : "/dashboard";
+  const res = NextResponse.redirect(new URL(destination, env.APP_URL));
   res.cookies.set(PB_COOKIE, serializeAuth(pb), authCookieOptions);
   // limpiar cookies temporales del OAuth
   res.cookies.delete("pb_oauth_verifier");
   res.cookies.delete("pb_oauth_state");
   res.cookies.delete("pb_oauth_provider");
+  res.cookies.delete("pb_oauth_return_to");
   return res;
 }
