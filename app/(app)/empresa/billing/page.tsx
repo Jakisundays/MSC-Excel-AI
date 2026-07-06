@@ -35,6 +35,8 @@ export default async function EmpresaBillingPage() {
     );
   }
 
+  // "||" a propósito, no "??": PocketBase devuelve 0 (no null) en un
+  // number sin setear, y 0 nunca es un override real con intención.
   return (
     <CompanyBillingView
       plans={plans}
@@ -43,8 +45,8 @@ export default async function EmpresaBillingPage() {
       currentPeriodEnd={billing.subscription.current_period_end}
       activeSeats={billing.activeSeats}
       usedThisMonth={billing.usedThisMonth}
-      usageLimit={billing.subscription.usage_limit_override ?? billing.plan.max_comparisons_month}
-      seatLimit={billing.subscription.seats_purchased ?? billing.plan.max_seats}
+      usageLimit={billing.subscription.usage_limit_override || billing.plan.max_comparisons_month}
+      seatLimit={billing.subscription.seats_purchased || billing.plan.max_seats}
     />
   );
 }

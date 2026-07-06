@@ -115,7 +115,8 @@ async function evaluateSubscriptionGate(userId: string, companyId: string): Prom
     };
   }
 
-  const limit = ctx.subscription.usage_limit_override ?? ctx.plan.max_comparisons_month;
+  // "||" no "??": un number sin setear en PocketBase es 0, no null/undefined.
+  const limit = ctx.subscription.usage_limit_override || ctx.plan.max_comparisons_month;
   const usedThisMonth = await countCompanySubmissionsThisMonth(ctx.company!.id);
   if (usedThisMonth >= limit) {
     return {

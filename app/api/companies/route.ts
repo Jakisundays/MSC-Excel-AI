@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = await getAdminPb();
-  const domain = (record.email as string)?.split("@")[1] || "";
   const slug = `${slugify(name)}-${record.id.slice(0, 6)}`;
 
   const plan = await admin
@@ -57,10 +56,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // email_domain queda vacío a propósito: no hay ningún flujo de
+  // verificación de dominio implementado todavía, así que reclamarlo acá
+  // sería una afirmación falsa (y ya nos rompió en producción — dos
+  // usuarios del mismo dominio no podían crear cada uno su empresa por el
+  // índice único). Reclamar el dominio de verdad queda para una futura
+  // función explícita de "verificar dominio", no como side-effect del alta.
   const company = await admin.collection("companies").create({
     name,
     slug,
-    email_domain: domain,
+    email_domain: "",
     domain_verified: false,
     owner: record.id,
     status: "active",

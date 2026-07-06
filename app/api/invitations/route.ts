@@ -77,7 +77,9 @@ export async function POST(req: NextRequest) {
   }
   const plan = await admin.collection("plans").getOne<PlanRecord>(subscription.plan);
 
-  const seatLimit = subscription.seats_purchased ?? plan.max_seats;
+  // "||" no "??": un number sin setear en PocketBase es 0, no null/undefined
+  // (0 nunca es un override real con intención de "0 asientos comprados").
+  const seatLimit = subscription.seats_purchased || plan.max_seats;
   if (seatLimit) {
     const [activeMembers, pendingInvites] = await Promise.all([
       admin.collection("company_members").getList(1, 1, {

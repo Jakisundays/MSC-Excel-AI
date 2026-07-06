@@ -45,6 +45,9 @@ function loadEnvLocal() {
 // esta migración — es la ÚNICA vez que este catálogo se copia a mano; tras
 // la Fase 3 (rewrite de lib/billing.ts), `plans` en PocketBase pasa a ser la
 // única fuente de verdad y PLAN_CATALOG se elimina del código.
+// max_seats: null en los tres — asientos ilimitados en todos los planes
+// (decisión explícita, jul 2026: la diferenciación entre planes es
+// comparaciones/mes y precio, no cantidad de usuarios).
 const PLAN_SEED = [
   {
     key: "esencial",
@@ -52,7 +55,7 @@ const PLAN_SEED = [
     price_cents: 100000,
     currency: "USD",
     max_comparisons_month: 600,
-    max_seats: 3,
+    max_seats: null,
     overage_cents_per_unit: 200,
     is_custom: false,
     active: true,
@@ -63,7 +66,7 @@ const PLAN_SEED = [
     price_cents: 180000,
     currency: "USD",
     max_comparisons_month: 1200,
-    max_seats: 10,
+    max_seats: null,
     overage_cents_per_unit: 183,
     is_custom: false,
     active: true,
