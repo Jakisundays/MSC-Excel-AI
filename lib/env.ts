@@ -55,15 +55,11 @@ export const env = {
   // scripts/migrate-to-companies.mjs con 0 usuarios huérfanos.
   SUBSCRIPTION_GATE_MODE: (process.env.SUBSCRIPTION_GATE_MODE ||
     "log") as "off" | "log" | "enforce",
-  // SMTP propio para emails transaccionales (hoy solo invitaciones de
-  // empresa). Vacío = no se envía nada, solo se loguea (ver lib/mailer.ts) —
-  // no rompe el flujo de invitación si todavía no está configurado.
-  SMTP_HOST: process.env.SMTP_HOST || "",
-  SMTP_PORT: Number(process.env.SMTP_PORT || 587),
-  SMTP_SECURE: process.env.SMTP_SECURE === "true",
-  SMTP_USER: process.env.SMTP_USER || "",
-  SMTP_PASS: process.env.SMTP_PASS || "",
-  SMTP_FROM: process.env.SMTP_FROM || "",
+  // Secreto compartido con POST /send-invitation-email en el orchestrator
+  // de verito (mismo valor que INVITATION_EMAIL_SECRET en su .env) — Next.js
+  // no tiene SMTP propio, reusa el que ya está configurado ahí (ver
+  // lib/mailer.ts). Vacío = no se envía nada, solo se loguea.
+  INVITATION_EMAIL_SECRET: process.env.INVITATION_EMAIL_SECRET || "",
 };
 
 /**
