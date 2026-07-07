@@ -23,6 +23,8 @@ const MOCK: SubmissionRecord[] = [
     error: "",
     result_file: "resultado_cartera_marzo.xlsx",
     result_file_size: 331_442,
+    original_file_a: "cartera_marzo.xlsx",
+    original_file_b: "siniestros_q1.xlsx",
     processing_started_at: "2026-06-28T14:30:30Z",
     completed_at: "2026-06-28T14:52:10Z",
     ai_agent_job_id: "job-abc123",
@@ -46,6 +48,11 @@ const MOCK: SubmissionRecord[] = [
     error: "",
     result_file: "",
     result_file_size: 0,
+    // Sin original guardado a propósito: cubre en DEV_PREVIEW el caso de
+    // una subida directa a PocketBase que falló (best-effort, no bloqueante)
+    // o de una solicitud creada antes de este campo -- ver §6 del plan.
+    original_file_a: "",
+    original_file_b: "",
     processing_started_at: "2026-06-27T09:15:20Z",
     completed_at: "",
     ai_agent_job_id: "",
@@ -69,6 +76,8 @@ const MOCK: SubmissionRecord[] = [
     error: "SMTP timeout",
     result_file: "",
     result_file_size: 0,
+    original_file_a: "datos_mayo.xls",
+    original_file_b: "base.xlsx",
     processing_started_at: "",
     completed_at: "",
     ai_agent_job_id: "",

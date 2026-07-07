@@ -124,16 +124,16 @@ export function NewRequestForm({ userEmail = "" }: { userEmail?: string }) {
     setError("");
   }
 
-  async function createPendingSubmission(
-    fa: { filename: string },
-    fb: { filename: string },
-  ): Promise<string> {
+  async function createPendingSubmission(): Promise<string> {
     const res = await fetch("/api/submissions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        file_a_name: fa.filename,
-        file_b_name: fb.filename,
+        // Nombre/tamaño del archivo ORIGINAL (no del blob filtrado a una
+        // hoja que se manda al orchestrator) -- así ambos describen el
+        // mismo objeto, ver docs/original-files-storage-plan.md §1.3.
+        file_a_name: fileA?.name ?? "",
+        file_b_name: fileB?.name ?? "",
         file_a_size: fileA?.size ?? 0,
         file_b_size: fileB?.size ?? 0,
         sheet_a: sheetA,
@@ -144,6 +144,35 @@ export function NewRequestForm({ userEmail = "" }: { userEmail?: string }) {
     if (!res.ok) throw new Error("No se pudo registrar la solicitud.");
     const { id } = await res.json();
     return id as string;
+  }
+
+  /**
+   * Sube los archivos ORIGINALES (sin filtrar a una hoja) directo al
+   * storage de PocketBase, en paralelo con el envío al orchestrator --
+   * bypassea el límite de ~4.5MB de Vercel igual que ese envío (ver
+   * docs/original-files-storage-plan.md, Opción A). Best-effort a
+   * propósito: nunca debe bloquear ni hacer fallar la solicitud principal,
+   * por eso nunca lanza (todo error queda contenido acá).
+   */
+  async function uploadOriginalFiles(
+    submissionId: string,
+    pbUploadToken: string | null,
+    pocketbaseUrl: string | null,
+  ): Promise<void> {
+    if (!pbUploadToken || !pocketbaseUrl || !fileA || !fileB) return;
+    try {
+      const fd = new FormData();
+      fd.append("original_file_a", fileA, fileA.name);
+      fd.append("original_file_b", fileB, fileB.name);
+      await fetch(`${pocketbaseUrl}/api/collections/submissions/records/${submissionId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${pbUploadToken}` },
+        body: fd,
+      });
+    } catch {
+      // Silencioso: guardar el original es una mejora, no el flujo
+      // principal (que ya se resolvió vía el orchestrator).
+    }
   }
 
   async function applyDispatchResult(
@@ -179,14 +208,20 @@ export function NewRequestForm({ userEmail = "" }: { userEmail?: string }) {
       // cierra o pierde red durante la subida, la solicitud ya quedó
       // guardada como "pending" en vez de perderse.
       setPhase("registering");
-      const submissionId = await createPendingSubmission(fa, fb);
+      const submissionId = await createPendingSubmission();
 
       setPhase("authorizing");
       const tRes = await fetch("/api/upload-ticket", { method: "POST" });
       if (!tRes.ok) throw new Error("No se pudo autorizar la subida. Iniciá sesión de nuevo.");
-      const { ticket, orchestratorUrl } = await tRes.json();
+      const { ticket, orchestratorUrl, pbUploadToken, pocketbaseUrl } = await tRes.json();
 
       setPhase("uploading");
+
+      // Best-effort y en paralelo con el envío al orchestrator de abajo --
+      // adrede sin `await` acá: si guardar el original tarda o falla, no
+      // debe demorar ni romper el flujo principal de la solicitud.
+      uploadOriginalFiles(submissionId, pbUploadToken, pocketbaseUrl).catch(() => {});
+
       let data: OrchestratorResult = {};
 
       if (DEV_PREVIEW) {

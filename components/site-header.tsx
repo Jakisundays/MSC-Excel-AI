@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 import { CommandMenu } from "@/components/command-menu";
+import { NotificationsBell } from "@/components/notifications-bell";
 
 const TITLES: Record<string, string> = {
   "/dashboard": "Resumen",
@@ -34,6 +35,7 @@ export function SiteHeader() {
 
       <div className="ml-auto flex items-center gap-1.5">
         <CommandMenu />
+        <NotificationsBell />
         <ModeToggle />
         {showNewRequest && (
           <Button asChild size="sm">

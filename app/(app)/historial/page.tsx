@@ -3,6 +3,7 @@ import { searchSubmissions } from "@/lib/submissions";
 import type { SubmissionsScope } from "@/lib/submissions";
 import { listCompanyMembers } from "@/lib/company";
 import { HistorialView } from "@/components/historial-view";
+import { NotificationOptInBanner } from "@/components/notification-opt-in-banner";
 import type { SubmissionStatus } from "@/lib/pocketbase/types";
 
 export const metadata = { title: "Historial" };
@@ -18,7 +19,12 @@ export default async function HistorialPage({
   const session = await getSession();
 
   if (!session) {
-    return <HistorialView initialResult={null} initialParams={{}} members={[]} error />;
+    return (
+      <>
+        <NotificationOptInBanner />
+        <HistorialView initialResult={null} initialParams={{}} members={[]} error />
+      </>
+    );
   }
 
   const scope: SubmissionsScope = sp.scope === "team" ? "team" : "mine";
@@ -40,23 +46,29 @@ export default async function HistorialPage({
   try {
     const result = await searchSubmissions(session, { ...initialParams, page: 1 });
     return (
-      <HistorialView
-        initialResult={result}
-        initialParams={initialParams}
-        members={members}
-        canSeeTeam={canSeeTeam}
-        error={false}
-      />
+      <>
+        <NotificationOptInBanner />
+        <HistorialView
+          initialResult={result}
+          initialParams={initialParams}
+          members={members}
+          canSeeTeam={canSeeTeam}
+          error={false}
+        />
+      </>
     );
   } catch {
     return (
-      <HistorialView
-        initialResult={null}
-        initialParams={initialParams}
-        members={members}
-        canSeeTeam={canSeeTeam}
-        error
-      />
+      <>
+        <NotificationOptInBanner />
+        <HistorialView
+          initialResult={null}
+          initialParams={initialParams}
+          members={members}
+          canSeeTeam={canSeeTeam}
+          error
+        />
+      </>
     );
   }
 }

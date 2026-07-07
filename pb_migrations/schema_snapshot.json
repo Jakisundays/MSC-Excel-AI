@@ -680,6 +680,54 @@
         "required": false,
         "system": false,
         "type": "relation"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "file2420845101",
+        "maxSelect": 1,
+        "maxSize": 26214400,
+        "mimeTypes": [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-excel"
+        ],
+        "name": "original_file_a",
+        "presentable": false,
+        "protected": false,
+        "required": false,
+        "system": false,
+        "thumbs": null,
+        "type": "file"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "file155351959",
+        "maxSelect": 1,
+        "maxSize": 26214400,
+        "mimeTypes": [
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.ms-excel"
+        ],
+        "name": "original_file_b",
+        "presentable": false,
+        "protected": false,
+        "required": false,
+        "system": false,
+        "thumbs": null,
+        "type": "file"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "date1162298124",
+        "max": "",
+        "min": "",
+        "name": "notified_at",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
       }
     ],
     "indexes": [
@@ -689,7 +737,7 @@
       "CREATE INDEX `idx_submissions_company_status_created` ON `submissions` (`company`, `status`, `created`)"
     ],
     "created": "2026-07-02 08:20:10.571Z",
-    "updated": "2026-07-07 03:06:27.358Z",
+    "updated": "2026-07-07 05:44:18.173Z",
     "system": false
   },
   {
@@ -1548,6 +1596,266 @@
     ],
     "created": "2026-07-06 19:58:28.403Z",
     "updated": "2026-07-06 19:58:28.403Z",
+    "system": false
+  },
+  {
+    "id": "pbc_2301922722",
+    "listRule": "user = @request.auth.id",
+    "viewRule": "user = @request.auth.id",
+    "createRule": null,
+    "updateRule": "user = @request.auth.id && @request.body.submission:isset = false && @request.body.type:isset = false && @request.body.user:isset = false && @request.body.company:isset = false",
+    "deleteRule": null,
+    "name": "notifications",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "pbc_3482339971",
+        "help": "",
+        "hidden": false,
+        "id": "relation3674561267",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "submission",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "_pb_users_auth_",
+        "help": "",
+        "hidden": false,
+        "id": "relation2375276105",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "user",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_3866053794",
+        "help": "",
+        "hidden": false,
+        "id": "relation1337919823",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "company",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "select2363381545",
+        "maxSelect": 1,
+        "name": "type",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "submission_completed",
+          "submission_failed",
+          "submission_timeout"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "date3805952114",
+        "max": "",
+        "min": "",
+        "name": "read_at",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE INDEX `idx_notifications_user_created` ON `notifications` (`user`, `created`)"
+    ],
+    "created": "2026-07-07 05:44:18.835Z",
+    "updated": "2026-07-07 05:44:18.835Z",
+    "system": false
+  },
+  {
+    "id": "pbc_1438754935",
+    "listRule": "user = @request.auth.id",
+    "viewRule": "user = @request.auth.id",
+    "createRule": null,
+    "updateRule": null,
+    "deleteRule": "@request.auth.id != \"\" && user = @request.auth.id",
+    "name": "push_subscriptions",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "help": "",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": true,
+        "collectionId": "_pb_users_auth_",
+        "help": "",
+        "hidden": false,
+        "id": "relation2375276105",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "user",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text3292663675",
+        "max": 0,
+        "min": 0,
+        "name": "endpoint",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text4057343320",
+        "max": 0,
+        "min": 0,
+        "name": "keys_p256dh",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text933984448",
+        "max": 0,
+        "min": 0,
+        "name": "keys_auth",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text3293145029",
+        "max": 0,
+        "min": 0,
+        "name": "user_agent",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3088861482",
+        "name": "last_seen_at",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [
+      "CREATE UNIQUE INDEX `idx_push_subscriptions_endpoint` ON `push_subscriptions` (`endpoint`)"
+    ],
+    "created": "2026-07-07 05:44:24.561Z",
+    "updated": "2026-07-07 05:44:24.561Z",
     "system": false
   }
 ]

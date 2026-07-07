@@ -88,6 +88,8 @@ export function baseSubmission(
     error: "",
     result_file: "",
     result_file_size: 0,
+    original_file_a: "",
+    original_file_b: "",
     processing_started_at: "",
     completed_at: "",
     ai_agent_job_id: "",

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
+import { PushRegistration } from "@/components/push-registration";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -19,6 +20,7 @@ export default async function AppLayout({
   return (
     <TooltipProvider delayDuration={0}>
       <SidebarProvider>
+        <PushRegistration />
         <AppSidebar user={session} />
         <SidebarInset>
           <SiteHeader />

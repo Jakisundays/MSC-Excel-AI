@@ -26,16 +26,28 @@ function resultFileUrl(submission: SubmissionRecord): string {
   return `${env.POCKETBASE_URL}/api/files/submissions/${submission.id}/${encodeURIComponent(submission.result_file)}`;
 }
 
+/** Vacío si esta solicitud no tiene el original guardado (nunca se subió o es anterior a esta feature — ver docs/original-files-storage-plan.md §6). */
+function originalFileUrl(
+  submission: SubmissionRecord,
+  field: "original_file_a" | "original_file_b",
+): string {
+  const filename = submission[field];
+  if (!filename) return "";
+  return `${env.POCKETBASE_URL}/api/files/submissions/${submission.id}/${encodeURIComponent(filename)}`;
+}
+
 function FileSourceCard({
   label,
   name,
   sheet,
   size,
+  downloadUrl,
 }: {
   label: string;
   name: string;
   sheet: string;
   size: number;
+  downloadUrl?: string;
 }) {
   return (
     <div className="rounded-2xl border p-4">
@@ -49,6 +61,13 @@ function FileSourceCard({
           </div>
           <div className="truncate text-sm font-medium">{name}</div>
         </div>
+        {downloadUrl && (
+          <Button asChild variant="ghost" size="icon-sm" className="shrink-0">
+            <a href={downloadUrl} download={name} aria-label={`Descargar original de ${label}`}>
+              <Download />
+            </a>
+          </Button>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2 text-[10.5px]">
         {sheet && (
@@ -258,12 +277,14 @@ export function SubmissionDetail({
                   name={submission.file_a_name}
                   sheet={submission.sheet_a}
                   size={submission.file_a_size}
+                  downloadUrl={originalFileUrl(submission, "original_file_a")}
                 />
                 <FileSourceCard
                   label="Archivo B"
                   name={submission.file_b_name}
                   sheet={submission.sheet_b}
                   size={submission.file_b_size}
+                  downloadUrl={originalFileUrl(submission, "original_file_b")}
                 />
               </div>
 

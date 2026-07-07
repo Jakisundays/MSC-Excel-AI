@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminPb } from "@/lib/pocketbase/admin";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW } from "@/lib/preview";
+import { notifySubmissionResult } from "@/lib/notify";
 import type { SubmissionHistoryEntry, SubmissionRecord } from "@/lib/pocketbase/types";
 
 /**
@@ -38,24 +39,79 @@ export async function GET(req: NextRequest) {
 
   let marked = 0;
   for (const s of stale) {
+    // Re-chequeo pegado a la escritura: el webhook de cierre puede estar
+    // resolviendo este mismo submission en simultáneo (misma ventana de
+    // carrera que docs/e2e-testing-findings.md §1). El SDK de PocketBase no
+    // soporta un update condicionado por filtro, así que la mitigación
+    // disponible es reducir la ventana releyendo el estado fresco
+    // inmediatamente antes de escribir en vez de confiar en el `s` obtenido
+    // en el listado de arriba (que puede tener segundos de antigüedad si el
+    // lote es grande).
+    let fresh: SubmissionRecord;
+    try {
+      fresh = (await pb
+        .collection("submissions")
+        .getOne(s.id)) as unknown as SubmissionRecord;
+    } catch (e) {
+      console.error("[cron/mark-stale] no se pudo releer", s.id, e);
+      continue;
+    }
+    if (fresh.status !== "processing") {
+      // El webhook (u otra corrida) ya lo cerró -- no pisar.
+      console.warn(
+        "[cron/mark-stale] submission ya no está 'processing', se omite:",
+        s.id,
+        "estado actual:",
+        fresh.status,
+      );
+      continue;
+    }
+
     const nowIso = new Date().toISOString();
     const historyEntry: SubmissionHistoryEntry = {
       at: nowIso,
-      from: s.status,
+      from: fresh.status,
       to: "failed",
       note: `SLA vencido (${SLA_HOURS}h) sin callback del AI Agent.`,
     };
+    const history = [...(fresh.history ?? []), historyEntry];
+    let written: SubmissionRecord;
     try {
-      await pb.collection("submissions").update(s.id, {
+      written = (await pb.collection("submissions").update(s.id, {
         status: "failed",
         error: `El procesamiento no se completó dentro de ${SLA_HOURS}h. Si esperabas un resultado, contactá al equipo.`,
         completed_at: nowIso,
-        history: [...(s.history ?? []), historyEntry],
-      });
+        notified_at: nowIso,
+        history,
+      })) as unknown as SubmissionRecord;
       marked++;
     } catch (e) {
       // No interrumpir el resto del lote por un fallo puntual (§13: nunca crashear).
       console.error("[cron/mark-stale] no se pudo marcar", s.id, e);
+      continue;
+    }
+
+    // Mismo guard post-escritura que el webhook de cierre: si el `history`
+    // persistido difiere en longitud del que mandamos, el webhook ganó la
+    // carrera en el medio -- no duplicar notificación.
+    if ((written.history?.length ?? 0) !== history.length) {
+      console.error(
+        "[cron/mark-stale] posible escritura concurrente detectada tras update:",
+        s.id,
+      );
+      continue;
+    }
+
+    try {
+      // Mismo criterio que el resto del loop: un fallo acá no debe
+      // interrumpir el resto del lote.
+      await notifySubmissionResult(
+        pb,
+        { ...fresh, status: "failed", notified_at: nowIso } as SubmissionRecord,
+        "submission_timeout",
+      );
+    } catch (e) {
+      console.error("[cron/mark-stale] no se pudo notificar", s.id, e);
     }
   }
 

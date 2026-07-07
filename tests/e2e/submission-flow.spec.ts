@@ -66,6 +66,16 @@ test.describe("Flujo feliz completo: nueva-solicitud -> orchestrator -> webhook 
     await page.goto(`/historial/${submissionId}`);
     await expect(page.getByText("Completada").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("link", { name: /Descargar resultado/i })).toBeVisible();
+
+    // Los archivos ORIGINALES se suben directo navegador -> PocketBase en
+    // paralelo al envío al orchestrator (ver docs/original-files-storage-plan.md);
+    // si la subida llegó a tiempo, el detalle ofrece descargarlos.
+    await expect(
+      page.getByRole("link", { name: /Descargar original de Archivo A/i }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("link", { name: /Descargar original de Archivo B/i }),
+    ).toBeVisible();
   });
 
   test("un cierre fallido simulado marca la solicitud como error, con el mensaje del proveedor", async ({

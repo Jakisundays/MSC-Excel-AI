@@ -5,6 +5,7 @@ import { getAdminPb } from "@/lib/pocketbase/admin";
 import { verifyResultWebhookSignature } from "@/lib/webhooks/hmac";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW } from "@/lib/preview";
+import { notifySubmissionResult } from "@/lib/notify";
 import type {
   SubmissionHistoryEntry,
   SubmissionRecord,
@@ -111,6 +112,48 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Re-chequeo pegado a la escritura (cierra la ventana de carrera real:
+  // el SDK de PocketBase no soporta un update condicionado por filtro/versión
+  // -- ver docs/e2e-testing-findings.md §1 -- así que la mitigación
+  // disponible sin cambiar el modelo de auth del webhook es minimizar la
+  // ventana entre lectura y escritura todo lo posible, releyendo el estado
+  // fresco inmediatamente antes de escribir en vez de confiar en el `submission`
+  // leído arriba (que puede tener segundos de antigüedad por la validación de
+  // firma/HMAC de por medio). Dos callbacks casi simultáneos igual podrían
+  // colarse los dos por esta segunda lectura, así que además se verifica
+  // DESPUÉS de escribir (ver más abajo) que nadie más ganó la carrera.
+  let fresh: SubmissionRecord;
+  try {
+    fresh = (await pb
+      .collection("submissions")
+      .getOne(submission.id)) as unknown as SubmissionRecord;
+  } catch (e) {
+    console.error("[webhooks/processing-result] error releyendo submission:", e);
+    return NextResponse.json({ ok: false, error: "lookup failed" }, { status: 500 });
+  }
+  if (fresh.status === "completed" || fresh.status === "failed") {
+    if (fresh.status === status) {
+      return NextResponse.json({
+        ok: true,
+        submission_id: fresh.id,
+        already_processed: true,
+      });
+    }
+    console.error(
+      "[webhooks/processing-result] estado terminal conflictivo (releído):",
+      fresh.id,
+      "actual:",
+      fresh.status,
+      "reportado:",
+      status,
+    );
+    return NextResponse.json(
+      { ok: false, error: "conflicting terminal state" },
+      { status: 409 },
+    );
+  }
+  submission = fresh;
+
   const nowIso = new Date().toISOString();
   const historyEntry: SubmissionHistoryEntry = {
     at: nowIso,
@@ -123,6 +166,7 @@ export async function POST(req: NextRequest) {
   const payload: Record<string, unknown> = {
     status,
     completed_at: nowIso,
+    notified_at: nowIso,
     processing_started_at: submission.processing_started_at || processingStartedAtInput || nowIso,
     ai_agent_job_id: aiAgentJobId || submission.ai_agent_job_id || "",
     history,
@@ -143,10 +187,13 @@ export async function POST(req: NextRequest) {
     payload.result_file_size = 0;
   }
 
+  let written: SubmissionRecord;
   try {
     // Una sola escritura con todos los campos juntos (§13): evita estados
     // intermedios donde el archivo subió pero el status quedó sin aplicar.
-    await pb.collection("submissions").update(submission.id, payload);
+    written = (await pb
+      .collection("submissions")
+      .update(submission.id, payload)) as unknown as SubmissionRecord;
   } catch (e) {
     const pbStatus = e instanceof ClientResponseError ? e.status : 0;
     console.error("[webhooks/processing-result] error escribiendo submission:", e);
@@ -154,6 +201,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "invalid payload" }, { status: 400 });
     }
     return NextResponse.json({ ok: false, error: "write failed" }, { status: 500 });
+  }
+
+  // Guard post-escritura: el SDK de PocketBase no soporta un update
+  // condicionado por filtro/versión (no hay "UPDATE...WHERE" a nivel de
+  // RecordService, confirmado contra el código fuente del backend -- los
+  // superusuarios bypasean por completo `updateRule`), así que no existe un
+  // compare-and-swap nativo disponible sin re-modelar el auth del webhook.
+  // Como mitigación real: se compara el `history` recién escrito contra el
+  // que nosotros enviamos. Si otro writer (otro callback casi simultáneo, o
+  // el cron mark-stale) alcanzó a insertar una entrada entre nuestra
+  // relectura y nuestra escritura, el array persistido en DB va a diferir
+  // del que mandamos (por el entry ajeno) y lo tratamos como derrota
+  // explícita: no disparamos notificación duplicada.
+  const wonRace = (written.history?.length ?? 0) === history.length;
+  if (!wonRace) {
+    console.error(
+      "[webhooks/processing-result] posible escritura concurrente detectada tras update:",
+      submission.id,
+    );
+    return NextResponse.json(
+      { ok: false, error: "conflicting concurrent write" },
+      { status: 409 },
+    );
+  }
+
+  // El estado ya se escribió correctamente en PocketBase -- eso es lo que
+  // importa para el orchestrator. Un fallo acá nunca debe convertir la
+  // respuesta HTTP del webhook en un error (notifySubmissionResult ya no
+  // tira, pero se envuelve igual por defensa en profundidad).
+  try {
+    await notifySubmissionResult(
+      pb,
+      { ...submission, ...payload, id: submission.id } as SubmissionRecord,
+      status === "completed" ? "submission_completed" : "submission_failed",
+    );
+  } catch (e) {
+    console.error("[webhooks/processing-result] error notificando resultado:", e);
   }
 
   return NextResponse.json({

@@ -51,6 +51,47 @@ export function invitationEmailHtml(params: {
   `;
 }
 
+/**
+ * Email de respaldo de cierre de procesamiento (Fase 1 del plan de
+ * notificaciones, docs/notificaciones-push-plan.md §2.1 y §7). Copy
+ * genérico a propósito: nunca incluye nombre de archivo real ni
+ * destinatarios, para no exponer esos datos en previews de bandeja de
+ * entrada / pantalla de bloqueo.
+ */
+export function submissionResultEmailHtml(params: {
+  fileALabel: string;
+  fileBLabel: string;
+  type: "submission_completed" | "submission_failed" | "submission_timeout";
+  errorMessage?: string;
+  detailUrl: string;
+}): string {
+  const { type, errorMessage, detailUrl } = params;
+
+  let message: string;
+  let buttonLabel: string;
+  if (type === "submission_completed") {
+    message = "<p>Tu solicitud ya está lista para descargar.</p>";
+    buttonLabel = "Ver resultado";
+  } else if (type === "submission_failed") {
+    message = "<p>Tu solicitud no se pudo procesar.</p>";
+    if (errorMessage) {
+      message += `<p>${escapeHtml(errorMessage)}</p>`;
+    }
+    buttonLabel = "Ver detalle";
+  } else {
+    message =
+      "<p>Tu solicitud tardó más de lo esperado y fue marcada como fallida. Si esperabas un resultado, contactá al equipo.</p>";
+    buttonLabel = "Ver detalle";
+  }
+
+  return `
+    <p>Hola,</p>
+    ${message}
+    <p><a href="${detailUrl}">${buttonLabel}</a></p>
+    <p style="color:#666;font-size:13px">Este es un aviso automático de MSC Excel AI.</p>
+  `;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")

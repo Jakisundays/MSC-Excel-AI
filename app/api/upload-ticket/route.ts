@@ -5,11 +5,23 @@ import {
   serializeAuth,
   authCookieOptions,
 } from "@/lib/pocketbase/server";
+import { getAdminPb } from "@/lib/pocketbase/admin";
 import { signUploadTicket } from "@/lib/ticket";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW, FAKE_USER } from "@/lib/preview";
 import { getActiveCompanyContext } from "@/lib/auth";
 import { countCompanySubmissionsThisMonth } from "@/lib/submissions";
+
+/**
+ * Cuánto vive el token de impersonación que autoriza la subida directa de
+ * los archivos ORIGINALES navegador -> PocketBase (ver
+ * docs/original-files-storage-plan.md, Opción A). Deliberadamente corto:
+ * muy por debajo de los 5 días del authToken de sesión normal, para que
+ * exponerlo un instante al JS del cliente no equivalga a robar la sesión.
+ * Solo necesita sobrevivir el tiempo de subir dos archivos, nunca se
+ * reutiliza más allá de ese request.
+ */
+const ORIGINAL_UPLOAD_TOKEN_TTL_SECONDS = 120;
 
 /**
  * Emite un upload-ticket de corta duración tras validar la sesión
@@ -26,7 +38,11 @@ import { countCompanySubmissionsThisMonth } from "@/lib/submissions";
  *   confirma que ninguna cuenta real quede bloqueada por error.
  * - "enforce": bloquea de verdad. No activar antes de correr el backfill.
  *
- * Payload chico (sin archivos) → seguro bajo el límite de Vercel.
+ * Payload chico (sin archivos) → seguro bajo el límite de Vercel. Además
+ * del ticket del orchestrator, emite un token de impersonación de
+ * PocketBase (`pbUploadToken`) para que el navegador suba los archivos
+ * ORIGINALES directo a PocketBase, mismo motivo (bypassear el límite de
+ * ~4.5MB de Vercel) que ya aplica al ticket del orchestrator.
  */
 export async function POST() {
   if (DEV_PREVIEW) {
@@ -34,7 +50,12 @@ export async function POST() {
       sub: FAKE_USER.id,
       email: FAKE_USER.email,
     });
-    return NextResponse.json({ ticket, orchestratorUrl: env.ORCHESTRATOR_URL });
+    return NextResponse.json({
+      ticket,
+      orchestratorUrl: env.ORCHESTRATOR_URL,
+      pbUploadToken: null,
+      pocketbaseUrl: null,
+    });
   }
 
   const pb = await getServerPb();
@@ -72,9 +93,27 @@ export async function POST() {
     companyId: (record.company as string) || undefined,
   });
 
+  // Best-effort: guardar el original es una mejora, no el flujo principal
+  // (el envío al orchestrator ya se resolvió arriba). Si PocketBase no
+  // puede emitir el token de impersonación (instancia caída, admin creds
+  // inválidas, etc.), no rompemos el ticket completo -- el cliente
+  // simplemente se queda sin poder guardar el original esta vez.
+  let pbUploadToken: string | null = null;
+  try {
+    const adminPb = await getAdminPb();
+    const impersonated = await adminPb
+      .collection("users")
+      .impersonate(record.id, ORIGINAL_UPLOAD_TOKEN_TTL_SECONDS);
+    pbUploadToken = impersonated.authStore.token;
+  } catch (err) {
+    console.warn("[upload-ticket] no se pudo emitir el token de impersonación:", err);
+  }
+
   const res = NextResponse.json({
     ticket,
     orchestratorUrl: env.ORCHESTRATOR_URL,
+    pbUploadToken,
+    pocketbaseUrl: pbUploadToken ? env.POCKETBASE_URL : null,
   });
   // re-persistir la cookie con el token refrescado
   res.cookies.set(PB_COOKIE, serializeAuth(pb), authCookieOptions);

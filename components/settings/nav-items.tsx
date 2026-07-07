@@ -1,4 +1,4 @@
-import { CircleUserRound, CreditCard, Lock, Rows3, ShieldCheck } from "lucide-react";
+import { Bell, CircleUserRound, CreditCard, Lock, Rows3, ShieldCheck } from "lucide-react";
 
 export const SETTINGS_NAV = [
   { href: "/perfil", label: "Perfil", icon: CircleUserRound },
@@ -6,4 +6,5 @@ export const SETTINGS_NAV = [
   { href: "/perfil/cuenta", label: "Cuenta", icon: Rows3 },
   { href: "/perfil/planes", label: "Planes", icon: CreditCard },
   { href: "/perfil/privacidad", label: "Privacidad", icon: Lock },
+  { href: "/perfil/notificaciones", label: "Notificaciones", icon: Bell },
 ] as const;

@@ -28,8 +28,19 @@ export interface SubmissionRecord {
   /** Nombre del archivo de resultado en PocketBase (campo `file`), vacío si no hay. */
   result_file: string;
   result_file_size: number;
+  /**
+   * Nombre del archivo ORIGINAL (tal cual lo subió el usuario, sin filtrar
+   * a una hoja) en PocketBase, vacío si no se pudo guardar -- ver
+   * docs/original-files-storage-plan.md. Vacío también en toda solicitud
+   * creada antes de este campo (no hay backfill posible: esos bytes nunca
+   * se guardaron en ningún lado).
+   */
+  original_file_a: string;
+  original_file_b: string;
   processing_started_at: string;
   completed_at: string;
+  /** Cuándo se disparó notifySubmissionResult() para esta submission (gate de una sola disparada, ver lib/notify.ts). Opcional/vacío en submissions creadas antes de esta columna o que aún no llegaron a un estado terminal. */
+  notified_at?: string;
   ai_agent_job_id: string;
   history: SubmissionHistoryEntry[];
   created: string;
@@ -154,6 +165,38 @@ export interface InvitationRecord {
   status: InvitationStatus;
   invited_by: string;
   expires_at: string;
+  created: string;
+  updated: string;
+}
+
+// ── Notificaciones (Fase 1, docs/notificaciones-push-plan.md) ───
+
+export type NotificationType =
+  | "submission_completed"
+  | "submission_failed"
+  | "submission_timeout";
+
+export interface NotificationRecord {
+  id: string;
+  user: string;
+  company?: string;
+  submission: string;
+  type: NotificationType;
+  read_at?: string;
+  created: string;
+  updated: string;
+}
+
+// ── Web Push (Fase 2, docs/notificaciones-push-plan.md) ─────────
+
+export interface PushSubscriptionRecord {
+  id: string;
+  user: string;
+  endpoint: string;
+  keys_p256dh: string;
+  keys_auth: string;
+  user_agent?: string;
+  last_seen_at: string;
   created: string;
   updated: string;
 }

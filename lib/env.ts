@@ -60,6 +60,13 @@ export const env = {
   // no tiene SMTP propio, reusa el que ya está configurado ahí (ver
   // lib/mailer.ts). Vacío = no se envía nada, solo se loguea.
   INVITATION_EMAIL_SECRET: process.env.INVITATION_EMAIL_SECRET || "",
+  // Web Push (Fase 2, docs/notificaciones-push-plan.md). Par VAPID generado
+  // con `npx web-push generate-vapid-keys`. Vacío = el feature degrada en
+  // silencio (lib/push.ts no manda nada todavía), mismo criterio que
+  // INVITATION_EMAIL_SECRET arriba.
+  VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || "",
+  VAPID_SUBJECT: process.env.VAPID_SUBJECT || "mailto:soporte@dinardi.com.ar",
 };
 
 /**
