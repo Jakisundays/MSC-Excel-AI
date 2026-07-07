@@ -13,7 +13,7 @@ export default async function SubmissionDetailPage({
 }) {
   const { id } = await params;
   const session = await getSession();
-  const submission = session ? await getSubmission(session.id, id) : null;
+  const submission = session ? await getSubmission(session, id) : null;
 
   if (!submission) notFound();
 

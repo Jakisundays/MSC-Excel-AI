@@ -374,8 +374,8 @@
   },
   {
     "id": "pbc_3482339971",
-    "listRule": "@request.auth.id != \"\" && (user = @request.auth.id || (company = @request.auth.company && (@request.auth.company_role = \"owner\" || @request.auth.company_role = \"admin\")))",
-    "viewRule": "@request.auth.id != \"\" && (user = @request.auth.id || (company = @request.auth.company && (@request.auth.company_role = \"owner\" || @request.auth.company_role = \"admin\")))",
+    "listRule": "@request.auth.id != \"\" && (user = @request.auth.id || company = @request.auth.company)",
+    "viewRule": "@request.auth.id != \"\" && (user = @request.auth.id || company = @request.auth.company)",
     "createRule": "@request.auth.id != \"\" && @request.body.user = @request.auth.id && @request.body.company = @request.auth.company",
     "updateRule": "@request.auth.id != \"\" && user = @request.auth.id",
     "deleteRule": null,
@@ -683,10 +683,13 @@
       }
     ],
     "indexes": [
-      "CREATE UNIQUE INDEX `idx_submissions_orchestrator_request_id` ON `submissions` (`orchestrator_request_id`) WHERE `orchestrator_request_id` != ''"
+      "CREATE UNIQUE INDEX `idx_submissions_orchestrator_request_id` ON `submissions` (`orchestrator_request_id`) WHERE `orchestrator_request_id` != ''",
+      "CREATE INDEX `idx_submissions_user_created` ON `submissions` (`user`, `created`)",
+      "CREATE INDEX `idx_submissions_company_created` ON `submissions` (`company`, `created`)",
+      "CREATE INDEX `idx_submissions_company_status_created` ON `submissions` (`company`, `status`, `created`)"
     ],
     "created": "2026-07-02 08:20:10.571Z",
-    "updated": "2026-07-06 19:58:29.082Z",
+    "updated": "2026-07-07 03:06:27.358Z",
     "system": false
   },
   {
