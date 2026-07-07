@@ -13,19 +13,43 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { SubmissionRecord } from "@/lib/pocketbase/types";
+import type { CompanyMemberView } from "@/lib/company";
+import type { SubmissionWithAuthor } from "@/lib/submissions";
+
+function AuthorLabel({
+  submission,
+  memberStatusById,
+}: {
+  submission: SubmissionWithAuthor;
+  memberStatusById?: Map<string, CompanyMemberView["status"]>;
+}) {
+  const name = submission.authorName || submission.authorEmail;
+  if (!name) return null;
+  const isExMember = memberStatusById?.get(submission.user) !== "active";
+  return (
+    <span className="text-muted-foreground truncate text-xs">
+      {name}
+      {isExMember && <span className="ml-1 opacity-70">(ex-miembro)</span>}
+    </span>
+  );
+}
 
 /**
  * Tabla de solicitudes responsive: tabla en >=md, cards apiladas en mobile.
  * `bare` omite el contenedor con borde (para anidar dentro de otra card).
- * Cada fila navega al detalle de la solicitud.
+ * Cada fila navega al detalle de la solicitud. `showAuthor` agrega la
+ * columna "Creado por" (solo tiene sentido en modo "ver equipo").
  */
 export function SubmissionsTable({
   items,
   bare = false,
+  showAuthor = false,
+  memberStatusById,
 }: {
-  items: SubmissionRecord[];
+  items: SubmissionWithAuthor[];
   bare?: boolean;
+  showAuthor?: boolean;
+  memberStatusById?: Map<string, CompanyMemberView["status"]>;
 }) {
   const router = useRouter();
   const goTo = (id: string) => router.push(`/historial/${id}`);
@@ -44,6 +68,7 @@ export function SubmissionsTable({
               <TableHead className="w-[150px]">Fecha</TableHead>
               <TableHead>Archivos</TableHead>
               <TableHead className="w-[170px]">Hojas</TableHead>
+              {showAuthor && <TableHead className="w-[180px]">Creado por</TableHead>}
               <TableHead className="w-[130px]">Estado</TableHead>
             </TableRow>
           </TableHeader>
@@ -69,6 +94,11 @@ export function SubmissionsTable({
                 <TableCell className="text-muted-foreground">
                   {s.sheet_a} · {s.sheet_b}
                 </TableCell>
+                {showAuthor && (
+                  <TableCell>
+                    <AuthorLabel submission={s} memberStatusById={memberStatusById} />
+                  </TableCell>
+                )}
                 <TableCell>
                   <StatusBadge status={s.status} />
                 </TableCell>
@@ -106,6 +136,11 @@ export function SubmissionsTable({
             <div className="text-muted-foreground mt-1.5 text-xs">
               Hojas: {s.sheet_a} · {s.sheet_b}
             </div>
+            {showAuthor && (
+              <div className="mt-1">
+                <AuthorLabel submission={s} memberStatusById={memberStatusById} />
+              </div>
+            )}
           </div>
         ))}
       </div>

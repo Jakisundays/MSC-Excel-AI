@@ -8,6 +8,7 @@ import {
   Mail,
   Sparkles,
   TriangleAlert,
+  Users,
 } from "lucide-react";
 
 import { StatusBadge } from "@/components/status-badge";
@@ -18,6 +19,7 @@ import { formatBytes, formatDateTime } from "@/lib/format";
 import { env } from "@/lib/env";
 import { cn } from "@/lib/utils";
 import type { SubmissionRecord } from "@/lib/pocketbase/types";
+import type { SubmissionWithAuthor } from "@/lib/submissions";
 
 function resultFileUrl(submission: SubmissionRecord): string {
   if (!submission.result_file) return "";
@@ -163,8 +165,9 @@ function ResultCard({ submission }: { submission: SubmissionRecord }) {
 export function SubmissionDetail({
   submission,
 }: {
-  submission: SubmissionRecord;
+  submission: SubmissionWithAuthor;
 }) {
+  const authorLabel = submission.authorName || submission.authorEmail;
   const shortId = submission.id.slice(0, 6).toUpperCase();
   const title = `${submission.sheet_a} × ${submission.sheet_b}`;
   const updatedDiffers = submission.updated !== submission.created;
@@ -222,6 +225,13 @@ export function SubmissionDetail({
         <ArrowLeft className="size-3.5" aria-hidden />
         Volver al historial
       </Link>
+
+      {authorLabel && (
+        <div className="bg-muted text-muted-foreground mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium">
+          <Users className="size-3.5" aria-hidden />
+          Viendo el proceso de {authorLabel}
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap items-center gap-2.5">
         <span className="text-muted-foreground font-mono text-[13px] font-medium">

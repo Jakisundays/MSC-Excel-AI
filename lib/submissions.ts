@@ -4,7 +4,7 @@ import { getServerPb } from "@/lib/pocketbase/server";
 import { DEV_PREVIEW } from "@/lib/preview";
 import { listCompanyMembers } from "@/lib/company";
 import type { Session } from "@/lib/auth";
-import type { SubmissionRecord, SubmissionStatus, UserRecord } from "@/lib/pocketbase/types";
+import type { SubmissionRecord, SubmissionStatus } from "@/lib/pocketbase/types";
 
 const MOCK: SubmissionRecord[] = [
   {
@@ -119,7 +119,12 @@ export async function getSubmission(
 
   try {
     const pb = await getServerPb();
-    const rec = await pb.collection("submissions").getOne(id, { expand: "user" });
+    // Sin expand: "user" a propósito -- users.viewRule ("id = @request.auth.id")
+    // bloquearía la expansión para cualquier fila que no sea la propia del
+    // actor, aunque submissions.viewRule sí permita verla (hallazgo real de
+    // QA, jul 2026). El nombre del autor se resuelve aparte más abajo, vía
+    // listCompanyMembers (admin), que no tiene esa restricción.
+    const rec = await pb.collection("submissions").getOne(id);
     const submission = rec as unknown as SubmissionRecord;
 
     const isOwner = submission.user === session.id;
@@ -129,7 +134,8 @@ export async function getSubmission(
     if (!isOwner && !canSeeTeamSubmission) return null;
     if (isOwner) return submission;
 
-    const author = (rec as unknown as { expand?: { user?: UserRecord } }).expand?.user;
+    const members = await listCompanyMembers(session.company).catch(() => []);
+    const author = members.find((m) => m.user?.id === submission.user)?.user;
     return {
       ...submission,
       reply_to: [],
@@ -330,17 +336,33 @@ export async function searchSubmissions(
     createdTo: params.createdTo,
   });
 
+  // Sin expand: "user" a propósito -- users.viewRule ("id = @request.auth.id")
+  // bloquearía la expansión para cualquier fila que no sea la propia del
+  // actor, aunque submissions.listRule sí permita verlas (hallazgo real de
+  // QA, jul 2026: en la práctica solo se resolvía el autor cuando coincidía
+  // con quien mira). El nombre se resuelve aparte, vía listCompanyMembers
+  // (admin, ya usado en toda la app para esto mismo), que no tiene esa
+  // restricción porque todos los autores en modo equipo son de la MISMA
+  // empresa que el actor (garantizado por el filtro `company =` de arriba).
+  let authorById: Map<string, { name: string; email: string }> | null = null;
+  if (scope === "team") {
+    const members = await listCompanyMembers(session.company).catch(() => []);
+    authorById = new Map(
+      members
+        .filter((m) => m.user)
+        .map((m) => [m.user!.id, { name: m.user!.name, email: m.user!.email }]),
+    );
+  }
+
   const result = await pb.collection("submissions").getList(page, perPage, {
     sort: "-created",
     filter,
-    expand: scope === "team" ? "user" : undefined,
   });
 
   const items: SubmissionWithAuthor[] = (result.items as unknown as SubmissionRecord[]).map(
-    (item, i) => {
-      if (scope !== "team") return item;
-      const author = (result.items[i] as unknown as { expand?: { user?: UserRecord } }).expand
-        ?.user;
+    (item) => {
+      if (!authorById) return item;
+      const author = authorById.get(item.user);
       return {
         ...item,
         authorName: author?.name || author?.email || "",
