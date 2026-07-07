@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Inbox, Loader2, Search, SearchX, TriangleAlert, Users } from "lucide-react";
+import { Inbox, Loader2, Search, SearchX, TriangleAlert, User, Users } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -231,19 +231,26 @@ export function HistorialView({
                   setScope("mine");
                   setMemberId(undefined);
                 }}
+                aria-pressed={scope === "mine"}
                 className={cn(
-                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                  scope === "mine" ? "bg-card shadow-sm" : "text-muted-foreground",
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                  scope === "mine"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
+                <User className="size-3.5" aria-hidden />
                 Mis procesos
               </button>
               <button
                 type="button"
                 onClick={() => setScope("team")}
+                aria-pressed={scope === "team"}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                  scope === "team" ? "bg-card shadow-sm" : "text-muted-foreground",
+                  scope === "team"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Users className="size-3.5" aria-hidden />
