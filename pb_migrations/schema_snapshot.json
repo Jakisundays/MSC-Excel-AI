@@ -728,6 +728,21 @@
         "required": false,
         "system": false,
         "type": "date"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text4001079477",
+        "max": 0,
+        "min": 0,
+        "name": "result_file_name",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       }
     ],
     "indexes": [
@@ -737,7 +752,7 @@
       "CREATE INDEX `idx_submissions_company_status_created` ON `submissions` (`company`, `status`, `created`)"
     ],
     "created": "2026-07-02 08:20:10.571Z",
-    "updated": "2026-07-07 05:44:18.173Z",
+    "updated": "2026-07-09 06:13:53.981Z",
     "system": false
   },
   {

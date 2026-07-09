@@ -23,6 +23,7 @@ const MOCK: SubmissionRecord[] = [
     error: "",
     result_file: "resultado_cartera_marzo.xlsx",
     result_file_size: 331_442,
+    result_file_name: "Resultado cartera marzo.xlsx",
     original_file_a: "cartera_marzo.xlsx",
     original_file_b: "siniestros_q1.xlsx",
     processing_started_at: "2026-06-28T14:30:30Z",
@@ -48,6 +49,7 @@ const MOCK: SubmissionRecord[] = [
     error: "",
     result_file: "",
     result_file_size: 0,
+    result_file_name: "",
     // Sin original guardado a propósito: cubre en DEV_PREVIEW el caso de
     // una subida directa a PocketBase que falló (best-effort, no bloqueante)
     // o de una solicitud creada antes de este campo -- ver §6 del plan.
@@ -76,6 +78,7 @@ const MOCK: SubmissionRecord[] = [
     error: "SMTP timeout",
     result_file: "",
     result_file_size: 0,
+    result_file_name: "",
     original_file_a: "datos_mayo.xls",
     original_file_b: "base.xlsx",
     processing_started_at: "",

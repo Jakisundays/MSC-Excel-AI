@@ -51,6 +51,21 @@ export function makeFakeAdminPb(
           }
           return found;
         },
+        // Usado por la ruta para el "re-chequeo pegado a la escritura"
+        // (relee por `id` justo antes de escribir, ver comentario en
+        // app/api/webhooks/processing-result/route.ts). Reusa la misma
+        // `store` que getFirstListItem/update para que la relectura vea
+        // el mismo estado.
+        async getOne(id: string): Promise<SubmissionRecord> {
+          const found = store.get(id);
+          if (!found) {
+            throw new ClientResponseError({
+              status: 404,
+              response: { message: "not found" },
+            });
+          }
+          return found;
+        },
         async update(id: string, payload: Record<string, unknown>) {
           updateCalls.push({ id, payload });
           if (opts.updateError) throw opts.updateError;
@@ -88,6 +103,7 @@ export function baseSubmission(
     error: "",
     result_file: "",
     result_file_size: 0,
+    result_file_name: "",
     original_file_a: "",
     original_file_b: "",
     processing_started_at: "",

@@ -1,6 +1,8 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { getAdminPb } from "@/lib/pocketbase/admin";
+import type { SubmissionRecord } from "@/lib/pocketbase/types";
 
 /**
  * No hay SMTP propio en Next.js: reusa el mismo SMTP ya configurado en el
@@ -34,6 +36,158 @@ export async function sendMail(opts: { to: string; subject: string; html: string
   } catch (err) {
     console.error(`[mailer] falló el envío a ${opts.to}:`, err instanceof Error ? err.message : err);
     return false;
+  }
+}
+
+export interface ResultEmailAttached {
+  original_1: boolean;
+  original_2: boolean;
+  result_file: boolean;
+}
+
+/**
+ * Email de resultado de una submission COMPLETADA, con los 3 adjuntos en
+ * el orden original_1/original_2/result_file (ver POST /send-result-email
+ * en el orchestrator) -- a diferencia de sendMail(), que no soporta
+ * adjuntos en absoluto (pega contra /send-invitation-email, que usa
+ * SimpleEmailInfo sin adjuntos). Llamada SOLO desde
+ * lib/notify.ts::notifySubmissionResult() para "submission_completed" --
+ * failed/timeout siguen usando sendMail()/submissionResultEmailHtml() sin
+ * adjuntos.
+ *
+ * Destinatarios: `params.to` debe ser `submission.reply_to` (los
+ * destinatarios configurados por el usuario en "Nueva solicitud"), NO
+ * `user.email` -- ver docstring de notifySubmissionResult().
+ *
+ * Nunca tira: cualquier fallo (fetch a PocketBase, red al orchestrator,
+ * respuesta no-2xx) se loguea con console.error y devuelve `{ ok: false }`,
+ * mismo criterio que sendMail().
+ */
+export async function sendResultEmailWithAttachments(params: {
+  to: string[];
+  subject: string;
+  bodyHtml: string;
+  submission: SubmissionRecord;
+}): Promise<{ ok: boolean; attached?: ResultEmailAttached }> {
+  const { to, subject, bodyHtml, submission } = params;
+
+  if (to.length === 0) {
+    console.error(
+      `[mailer] sendResultEmailWithAttachments: submission ${submission.id} no tiene destinatarios (reply_to vacío) — no se envía nada.`,
+    );
+    return { ok: false };
+  }
+  if (!submission.result_file) {
+    // Defensivo: no debería pasar si status=completed (el webhook de
+    // cierre exige result_file para marcar completed), pero sin esto no
+    // hay nada que mandar.
+    console.error(
+      `[mailer] sendResultEmailWithAttachments: submission ${submission.id} no tiene result_file (status=completed sin archivo) — no se envía nada.`,
+    );
+    return { ok: false };
+  }
+  if (!env.ORCHESTRATOR_URL || !env.INVITATION_EMAIL_SECRET) {
+    console.warn(
+      `[mailer] ORCHESTRATOR_URL/INVITATION_EMAIL_SECRET no configurados — no se envió el email de resultado de la submission ${submission.id}.`,
+    );
+    return { ok: false };
+  }
+
+  try {
+    const adminPb = await getAdminPb();
+    // pb.files.getURL() necesita el RecordModel completo (collectionId/
+    // collectionName incluidos) para armar la URL — el `submission` que
+    // recibe esta función puede venir de un merge parcial (ver
+    // app/api/webhooks/processing-result/route.ts), así que se relee el
+    // record real antes de pedir las URLs de archivo.
+    const record = await adminPb.collection("submissions").getOne(submission.id);
+
+    const form = new FormData();
+    for (const recipient of to) {
+      form.append("to", recipient);
+    }
+    form.append("subject", subject);
+    form.append("body_html", bodyHtml);
+
+    let attachedOriginal1 = false;
+    if (submission.original_file_a) {
+      const blob = await fetchPbFileBlob(adminPb, record, submission.original_file_a, submission.id, "original_file_a");
+      if (blob) {
+        form.append("original_1", blob, submission.file_a_name || "Original 1.xlsx");
+        attachedOriginal1 = true;
+      }
+    }
+
+    let attachedOriginal2 = false;
+    if (submission.original_file_b) {
+      const blob = await fetchPbFileBlob(adminPb, record, submission.original_file_b, submission.id, "original_file_b");
+      if (blob) {
+        form.append("original_2", blob, submission.file_b_name || "Original 2.xlsx");
+        attachedOriginal2 = true;
+      }
+    }
+
+    const resultBlob = await fetchPbFileBlob(adminPb, record, submission.result_file, submission.id, "result_file");
+    if (!resultBlob) {
+      // result_file es obligatorio: sin él no tiene sentido llamar al
+      // orchestrator (violaría su propia validación de campo requerido).
+      return { ok: false };
+    }
+    form.append("result_file", resultBlob, submission.result_file_name || "Resultado.xlsx");
+
+    console.log(
+      `[mailer] sendResultEmailWithAttachments: submission ${submission.id} — adjuntando original_1=${attachedOriginal1} original_2=${attachedOriginal2} result_file=true, enviando a ${to.length} destinatario(s).`,
+    );
+
+    const res = await fetch(`${env.ORCHESTRATOR_URL}/send-result-email`, {
+      method: "POST",
+      headers: { "X-Api-Key": env.INVITATION_EMAIL_SECRET },
+      body: form,
+    });
+    if (!res.ok) {
+      console.error(
+        `[mailer] orchestrator devolvió ${res.status} enviando el email de resultado de la submission ${submission.id}`,
+      );
+      return { ok: false };
+    }
+
+    const json = (await res.json()) as { ok: boolean; attached?: ResultEmailAttached };
+    return { ok: json.ok, attached: json.attached };
+  } catch (err) {
+    console.error(
+      `[mailer] falló el envío del email de resultado de la submission ${submission.id}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return { ok: false };
+  }
+}
+
+/** Baja los bytes reales de un archivo de PocketBase (campo `protected: false`,
+ * fetcheable directo sin token) como Blob, listo para FormData.append(). `null`
+ * ante cualquier fallo (loguea y sigue -- ver llamadores). */
+async function fetchPbFileBlob(
+  pb: Awaited<ReturnType<typeof getAdminPb>>,
+  record: Parameters<typeof pb.files.getURL>[0],
+  filename: string,
+  submissionId: string,
+  fieldLabel: string,
+): Promise<Blob | null> {
+  try {
+    const url = pb.files.getURL(record, filename);
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(
+        `[mailer] no se pudo bajar ${fieldLabel} de la submission ${submissionId}: HTTP ${res.status}`,
+      );
+      return null;
+    }
+    return await res.blob();
+  } catch (err) {
+    console.error(
+      `[mailer] error bajando ${fieldLabel} de la submission ${submissionId}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
   }
 }
 

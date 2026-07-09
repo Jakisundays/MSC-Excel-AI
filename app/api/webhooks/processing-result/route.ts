@@ -174,6 +174,11 @@ export async function POST(req: NextRequest) {
   if (status === "completed") {
     payload.result_file = resultFile;
     payload.result_file_size = resultFile instanceof File ? resultFile.size : 0;
+    // Nombre REAL del archivo (antes de que PocketBase lo mangle con un
+    // sufijo aleatorio al guardarlo) -- necesario para adjuntarlo con su
+    // nombre correcto en el email de resultado (lib/mailer.ts::
+    // sendResultEmailWithAttachments).
+    payload.result_file_name = resultFile instanceof File ? resultFile.name : "";
     // Limpia un `error` colgado de un intento anterior (ej. la submission
     // se reseteó a mano a "processing" para reintentar) -- un cierre
     // exitoso no debería dejar visible el error de un intento previo.
@@ -182,9 +187,10 @@ export async function POST(req: NextRequest) {
     payload.error = errorMessage;
     // Mismo criterio a la inversa: si un intento anterior había llegado a
     // completarse y se resetea para reintentar, un cierre fallido no debe
-    // dejar un result_file/tamaño de un resultado que ya no es válido.
+    // dejar un result_file/tamaño/nombre de un resultado que ya no es válido.
     payload.result_file = "";
     payload.result_file_size = 0;
+    payload.result_file_name = "";
   }
 
   let written: SubmissionRecord;

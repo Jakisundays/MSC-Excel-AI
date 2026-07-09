@@ -4,7 +4,7 @@ import type PocketBase from "pocketbase";
 
 import type { NotificationType, SubmissionRecord } from "@/lib/pocketbase/types";
 import { env } from "@/lib/env";
-import { sendMail, submissionResultEmailHtml } from "@/lib/mailer";
+import { sendMail, sendResultEmailWithAttachments, submissionResultEmailHtml } from "@/lib/mailer";
 import { sendPushToUser } from "@/lib/push";
 
 /**
@@ -40,29 +40,49 @@ export async function notifySubmissionResult(
   }
 
   try {
-    const user = await pb.collection("users").getOne(submission.user);
     const detailUrl = `${env.APP_URL}/historial/${submission.id}`;
 
-    let subject: string;
     if (type === "submission_completed") {
-      subject = "Tu solicitud está lista";
-    } else if (type === "submission_failed") {
-      subject = "Tu solicitud falló";
+      // Cambio deliberado: a los destinatarios CONFIGURADOS por el usuario
+      // en "Nueva solicitud" (`submission.reply_to`), NO al dueño de la
+      // cuenta (`user.email`) -- con los 3 adjuntos (originales +
+      // resultado), ver lib/mailer.ts::sendResultEmailWithAttachments.
+      const result = await sendResultEmailWithAttachments({
+        to: submission.reply_to,
+        subject: "Tu solicitud está lista",
+        bodyHtml: submissionResultEmailHtml({
+          fileALabel: "Archivo A",
+          fileBLabel: "Archivo B",
+          type,
+          errorMessage: submission.error || undefined,
+          detailUrl,
+        }),
+        submission,
+      });
+      if (!result.ok) {
+        console.error(
+          `[notify] no se pudo enviar el email de resultado (con adjuntos) para submission ${submission.id}` +
+            (result.attached ? ` (attached=${JSON.stringify(result.attached)})` : ""),
+        );
+      }
     } else {
-      subject = "Tu solicitud tardó demasiado";
-    }
+      // failed/timeout: sin cambios -- email genérico sin adjuntos al
+      // dueño de la cuenta, vía sendMail()/submissionResultEmailHtml().
+      const user = await pb.collection("users").getOne(submission.user);
+      const subject = type === "submission_failed" ? "Tu solicitud falló" : "Tu solicitud tardó demasiado";
 
-    await sendMail({
-      to: user.email,
-      subject,
-      html: submissionResultEmailHtml({
-        fileALabel: "Archivo A",
-        fileBLabel: "Archivo B",
-        type,
-        errorMessage: submission.error || undefined,
-        detailUrl,
-      }),
-    });
+      await sendMail({
+        to: user.email,
+        subject,
+        html: submissionResultEmailHtml({
+          fileALabel: "Archivo A",
+          fileBLabel: "Archivo B",
+          type,
+          errorMessage: submission.error || undefined,
+          detailUrl,
+        }),
+      });
+    }
   } catch (err) {
     console.error(
       `[notify] no se pudo enviar el email de respaldo para submission ${submission.id}:`,

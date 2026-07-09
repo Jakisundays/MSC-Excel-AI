@@ -29,6 +29,15 @@ export interface SubmissionRecord {
   result_file: string;
   result_file_size: number;
   /**
+   * Nombre REAL del archivo de resultado (el que llegó en el multipart del
+   * webhook de cierre, ANTES de que PocketBase lo mangle con un sufijo
+   * aleatorio al guardarlo) -- usado para adjuntarlo con su nombre correcto
+   * en el email de resultado (ver lib/mailer.ts::sendResultEmailWithAttachments).
+   * Vacío en submissions completadas ANTES de este campo (sin backfill
+   * posible: ese nombre real nunca se guardó en ningún lado).
+   */
+  result_file_name: string;
+  /**
    * Nombre del archivo ORIGINAL (tal cual lo subió el usuario, sin filtrar
    * a una hoja) en PocketBase, vacío si no se pudo guardar -- ver
    * docs/original-files-storage-plan.md. Vacío también en toda solicitud
