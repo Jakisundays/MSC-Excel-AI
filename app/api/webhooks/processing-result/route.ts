@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { ClientResponseError } from "pocketbase";
 
 import { getAdminPb } from "@/lib/pocketbase/admin";
@@ -233,18 +233,28 @@ export async function POST(req: NextRequest) {
   }
 
   // El estado ya se escribió correctamente en PocketBase -- eso es lo que
-  // importa para el orchestrator. Un fallo acá nunca debe convertir la
-  // respuesta HTTP del webhook en un error (notifySubmissionResult ya no
-  // tira, pero se envuelve igual por defensa en profundidad).
-  try {
-    await notifySubmissionResult(
-      pb,
-      { ...submission, ...payload, id: submission.id } as SubmissionRecord,
-      status === "completed" ? "submission_completed" : "submission_failed",
-    );
-  } catch (e) {
-    console.error("[webhooks/processing-result] error notificando resultado:", e);
-  }
+  // importa para el orchestrator, y lo único que debe bloquear la respuesta
+  // HTTP. notifySubmissionResult() (en especial el email con adjuntos:
+  // baja 3 archivos de PocketBase + los sube al orchestrator + espera el
+  // envío SMTP real) puede tardar más que el timeout default de la función
+  // serverless -- si se hiciera de forma síncrona antes de responder, un
+  // resultado con archivos grandes corre el riesgo real de que Vercel mate
+  // la función a mitad de camino, sin loguear nada (confirmado: pasó con
+  // una submission real de ~330KB combinados, jul-2026 -- con archivos de
+  // prueba de ~1.5KB nunca se manifestó). Por eso se dispara en segundo
+  // plano con after(): la respuesta ya salió, y el runtime de Vercel
+  // mantiene la función viva el tiempo que haga falta para completarlo.
+  after(async () => {
+    try {
+      await notifySubmissionResult(
+        pb,
+        { ...submission, ...payload, id: submission.id } as SubmissionRecord,
+        status === "completed" ? "submission_completed" : "submission_failed",
+      );
+    } catch (e) {
+      console.error("[webhooks/processing-result] error notificando resultado:", e);
+    }
+  });
 
   return NextResponse.json({
     ok: true,

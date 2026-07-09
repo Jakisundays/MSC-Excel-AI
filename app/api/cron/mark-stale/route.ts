@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 
 import { getAdminPb } from "@/lib/pocketbase/admin";
 import { env } from "@/lib/env";
@@ -102,17 +102,23 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    try {
-      // Mismo criterio que el resto del loop: un fallo acá no debe
-      // interrumpir el resto del lote.
-      await notifySubmissionResult(
-        pb,
-        { ...fresh, status: "failed", notified_at: nowIso } as SubmissionRecord,
-        "submission_timeout",
-      );
-    } catch (e) {
-      console.error("[cron/mark-stale] no se pudo notificar", s.id, e);
-    }
+    // Igual que en el webhook de cierre: no bloquear la respuesta del cron
+    // con el envío de notificaciones -- con un lote grande de submissions
+    // stale, notificar todas de forma síncrona en el loop podría exceder
+    // el timeout de la función. after() las dispara en segundo plano una
+    // vez que el cron ya respondió.
+    const submissionId = s.id;
+    after(async () => {
+      try {
+        await notifySubmissionResult(
+          pb,
+          { ...fresh, status: "failed", notified_at: nowIso } as SubmissionRecord,
+          "submission_timeout",
+        );
+      } catch (e) {
+        console.error("[cron/mark-stale] no se pudo notificar", submissionId, e);
+      }
+    });
   }
 
   return NextResponse.json({ ok: true, marked, checked: stale.length });

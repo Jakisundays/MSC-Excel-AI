@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
+import type { NextRequest as NextRequestType } from "next/server";
 import { signResultWebhook } from "@/lib/webhooks/hmac";
 import { ClientResponseError } from "pocketbase";
 import { baseSubmission, makeFakeAdminPb } from "../helpers/fake-pocketbase";
@@ -11,8 +11,35 @@ vi.mock("@/lib/pocketbase/admin", () => ({
   getAdminPb: vi.fn(),
 }));
 
+// after() (Next.js 15) exige un request scope real que no existe al invocar
+// el handler directo en un test -- se mockea preservando NextRequest/
+// NextResponse reales, capturando la promesa del callback para poder
+// esperarla explícitamente (ver callPost() más abajo) y que las
+// aserciones sobre efectos de notifySubmissionResult() sigan siendo
+// determinísticas.
+let capturedAfter: Promise<unknown> | null = null;
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    after: (fn: () => unknown) => {
+      capturedAfter = Promise.resolve(fn());
+    },
+  };
+});
+
+const { NextRequest } = await import("next/server");
 const { getAdminPb } = await import("@/lib/pocketbase/admin");
 const { POST } = await import("@/app/api/webhooks/processing-result/route");
+
+/** Invoca POST y espera cualquier trabajo en segundo plano registrado vía
+ * after() antes de devolver el control -- ver mock de next/server arriba. */
+async function callPost(request: NextRequestType) {
+  capturedAfter = null;
+  const res = await POST(request);
+  if (capturedAfter) await capturedAfter;
+  return res;
+}
 
 function signedHeaders(
   requestId: string,
@@ -67,7 +94,7 @@ describe("POST /api/webhooks/processing-result — happy paths", () => {
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(completedForm("req-1"), signedHeaders("req-1", "completed")));
+    const res = await callPost(makeRequest(completedForm("req-1"), signedHeaders("req-1", "completed")));
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -86,7 +113,7 @@ describe("POST /api/webhooks/processing-result — happy paths", () => {
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(
+    const res = await callPost(
       makeRequest(failedForm("req-2", "el proveedor no pudo procesar"), signedHeaders("req-2", "failed")),
     );
     const json = await res.json();
@@ -113,7 +140,7 @@ describe("POST /api/webhooks/processing-result — happy paths", () => {
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    await POST(makeRequest(completedForm("req-stale-1"), signedHeaders("req-stale-1", "completed")));
+    await callPost(makeRequest(completedForm("req-stale-1"), signedHeaders("req-stale-1", "completed")));
 
     expect(updateCalls[0].payload.error).toBe("");
   });
@@ -132,7 +159,7 @@ describe("POST /api/webhooks/processing-result — happy paths", () => {
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    await POST(makeRequest(failedForm("req-stale-2", "nuevo error"), signedHeaders("req-stale-2", "failed")));
+    await callPost(makeRequest(failedForm("req-stale-2", "nuevo error"), signedHeaders("req-stale-2", "failed")));
 
     expect(updateCalls[0].payload.result_file).toBe("");
     expect(updateCalls[0].payload.result_file_size).toBe(0);
@@ -151,7 +178,7 @@ describe("POST /api/webhooks/processing-result — happy paths", () => {
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    await POST(makeRequest(completedForm("req-3"), signedHeaders("req-3", "completed")));
+    await callPost(makeRequest(completedForm("req-3"), signedHeaders("req-3", "completed")));
 
     expect(updateCalls[0].payload.processing_started_at).toBe("2026-01-01T00:00:00.000Z");
   });
@@ -161,7 +188,7 @@ describe("POST /api/webhooks/processing-result — payload validation (400s)", (
   it("rejects a request with no request_id", async () => {
     const form = new FormData();
     form.set("status", "completed");
-    const res = await POST(makeRequest(form));
+    const res = await callPost(makeRequest(form));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("missing request_id");
   });
@@ -170,7 +197,7 @@ describe("POST /api/webhooks/processing-result — payload validation (400s)", (
     const form = new FormData();
     form.set("request_id", "req-1");
     form.set("status", "done");
-    const res = await POST(makeRequest(form));
+    const res = await callPost(makeRequest(form));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("invalid status");
   });
@@ -179,7 +206,7 @@ describe("POST /api/webhooks/processing-result — payload validation (400s)", (
     const form = new FormData();
     form.set("request_id", "req-1");
     form.set("status", "completed");
-    const res = await POST(makeRequest(form));
+    const res = await callPost(makeRequest(form));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("result_file is required when status=completed");
   });
@@ -188,7 +215,7 @@ describe("POST /api/webhooks/processing-result — payload validation (400s)", (
     const form = new FormData();
     form.set("request_id", "req-1");
     form.set("status", "failed");
-    const res = await POST(makeRequest(form));
+    const res = await callPost(makeRequest(form));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("error_message is required when status=failed");
   });
@@ -199,7 +226,7 @@ describe("POST /api/webhooks/processing-result — payload validation (400s)", (
       headers: { "content-type": "multipart/form-data; boundary=broken" },
       body: "this is not a valid multipart body",
     });
-    const res = await POST(req);
+    const res = await callPost(req);
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("invalid multipart body");
   });
@@ -207,13 +234,13 @@ describe("POST /api/webhooks/processing-result — payload validation (400s)", (
 
 describe("POST /api/webhooks/processing-result — signature verification (401s)", () => {
   it("rejects a request with no signature headers at all", async () => {
-    const res = await POST(makeRequest(completedForm("req-1")));
+    const res = await callPost(makeRequest(completedForm("req-1")));
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe("invalid signature");
   });
 
   it("rejects a tampered signature", async () => {
-    const res = await POST(
+    const res = await callPost(
       makeRequest(completedForm("req-1"), {
         "x-webhook-timestamp": String(Math.floor(Date.now() / 1000)),
         "x-webhook-signature": "sha256=deadbeef",
@@ -225,7 +252,7 @@ describe("POST /api/webhooks/processing-result — signature verification (401s)
   it("rejects a stale timestamp (301s old)", async () => {
     const timestamp = Math.floor(Date.now() / 1000) - 301;
     const signature = signResultWebhook(SECRET, { requestId: "req-1", status: "completed", timestamp });
-    const res = await POST(
+    const res = await callPost(
       makeRequest(completedForm("req-1"), {
         "x-webhook-timestamp": String(timestamp),
         "x-webhook-signature": signature,
@@ -237,7 +264,7 @@ describe("POST /api/webhooks/processing-result — signature verification (401s)
   it("never reaches PocketBase when the signature is invalid", async () => {
     const { pb } = makeFakeAdminPb();
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
-    await POST(makeRequest(completedForm("req-1"))); // sin headers de firma
+    await callPost(makeRequest(completedForm("req-1"))); // sin headers de firma
     expect(getAdminPb).not.toHaveBeenCalled();
   });
 });
@@ -247,7 +274,7 @@ describe("POST /api/webhooks/processing-result — idempotency & conflicts", () 
     const { pb } = makeFakeAdminPb({ submissions: [] });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(completedForm("req-ghost"), signedHeaders("req-ghost", "completed")));
+    const res = await callPost(makeRequest(completedForm("req-ghost"), signedHeaders("req-ghost", "completed")));
     expect(res.status).toBe(404);
     expect((await res.json()).error).toBe("unknown request_id");
   });
@@ -258,7 +285,7 @@ describe("POST /api/webhooks/processing-result — idempotency & conflicts", () 
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(completedForm("req-1"), signedHeaders("req-1", "completed")));
+    const res = await callPost(makeRequest(completedForm("req-1"), signedHeaders("req-1", "completed")));
     expect(res.status).toBe(500);
     expect((await res.json()).error).toBe("lookup failed");
   });
@@ -271,7 +298,7 @@ describe("POST /api/webhooks/processing-result — idempotency & conflicts", () 
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(completedForm("req-4"), signedHeaders("req-4", "completed")));
+    const res = await callPost(makeRequest(completedForm("req-4"), signedHeaders("req-4", "completed")));
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -287,7 +314,7 @@ describe("POST /api/webhooks/processing-result — idempotency & conflicts", () 
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(failedForm("req-5"), signedHeaders("req-5", "failed")));
+    const res = await callPost(makeRequest(failedForm("req-5"), signedHeaders("req-5", "failed")));
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("conflicting terminal state");
     expect(updateCalls).toHaveLength(0);
@@ -304,7 +331,7 @@ describe("POST /api/webhooks/processing-result — PocketBase write failures", (
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(completedForm("req-6"), signedHeaders("req-6", "completed")));
+    const res = await callPost(makeRequest(completedForm("req-6"), signedHeaders("req-6", "completed")));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe("invalid payload");
   });
@@ -318,7 +345,7 @@ describe("POST /api/webhooks/processing-result — PocketBase write failures", (
     });
     vi.mocked(getAdminPb).mockResolvedValue(pb as never);
 
-    const res = await POST(makeRequest(completedForm("req-7"), signedHeaders("req-7", "completed")));
+    const res = await callPost(makeRequest(completedForm("req-7"), signedHeaders("req-7", "completed")));
     expect(res.status).toBe(500);
     expect((await res.json()).error).toBe("write failed");
   });
