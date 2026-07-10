@@ -3,7 +3,6 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { getAdminPb } from "@/lib/pocketbase/admin";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW } from "@/lib/preview";
-import { notifySubmissionResult } from "@/lib/notify";
 import type { SubmissionHistoryEntry, SubmissionRecord } from "@/lib/pocketbase/types";
 
 /**
@@ -13,6 +12,10 @@ import type { SubmissionHistoryEntry, SubmissionRecord } from "@/lib/pocketbase/
  * como Vercel Cron (ver vercel.json) — protegido con CRON_SECRET.
  */
 const SLA_HOURS = 48;
+
+// Mismo criterio que el webhook de cierre: after() no extiende el límite
+// total de duración de la función, solo cuándo se envía la respuesta.
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   if (DEV_PREVIEW) {
@@ -102,21 +105,29 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    // Igual que en el webhook de cierre: no bloquear la respuesta del cron
-    // con el envío de notificaciones -- con un lote grande de submissions
-    // stale, notificar todas de forma síncrona en el loop podría exceder
-    // el timeout de la función. after() las dispara en segundo plano una
-    // vez que el cron ya respondió.
+    // Mismo criterio que el webhook de cierre: la notificación se delega a
+    // /api/internal/notify-submission (invocación separada, su propio
+    // presupuesto de tiempo) en vez de llamar a notifySubmissionResult()
+    // acá adentro -- con un lote grande de submissions stale, hacerlo de
+    // forma síncrona en el loop (o incluso en el after() de ESTA
+    // invocación) podría exceder el timeout de la función del cron.
     const submissionId = s.id;
     after(async () => {
       try {
-        await notifySubmissionResult(
-          pb,
-          { ...fresh, status: "failed", notified_at: nowIso } as SubmissionRecord,
-          "submission_timeout",
-        );
+        const notifyUrl = new URL("/api/internal/notify-submission", req.nextUrl.origin);
+        const res = await fetch(notifyUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Secret": env.RESULT_WEBHOOK_SECRET,
+          },
+          body: JSON.stringify({ submissionId, notificationType: "submission_timeout" }),
+        });
+        if (!res.ok) {
+          console.error("[cron/mark-stale] /api/internal/notify-submission respondió", res.status);
+        }
       } catch (e) {
-        console.error("[cron/mark-stale] no se pudo notificar", submissionId, e);
+        console.error("[cron/mark-stale] error disparando notificación interna", submissionId, e);
       }
     });
   }

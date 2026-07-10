@@ -5,7 +5,6 @@ import { getAdminPb } from "@/lib/pocketbase/admin";
 import { verifyResultWebhookSignature } from "@/lib/webhooks/hmac";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW } from "@/lib/preview";
-import { notifySubmissionResult } from "@/lib/notify";
 import type {
   SubmissionHistoryEntry,
   SubmissionRecord,
@@ -20,6 +19,16 @@ import type {
  * PocketBase — usa credenciales de superusuario porque no hay sesión de
  * usuario en una llamada server-to-server.
  */
+// after() adelanta CUÁNDO se envía la respuesta, pero no extiende el
+// límite total de duración de la función -- sin esto, el trabajo en
+// segundo plano (bajar 3 archivos de PocketBase + subirlos al orchestrator
+// + esperar el envío SMTP real) sigue corriendo contra el timeout default
+// del plan (bajo, ~10s), y se corta de forma intermitente según la
+// latencia de red del momento -- confirmado en producción: dos
+// submissions con archivos de tamaño casi idéntico, una llegó y la otra
+// no. 60s le da margen real de sobra a ese trabajo.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   if (DEV_PREVIEW) {
     return NextResponse.json({ ok: true, submission_id: "dev", already_processed: false });
@@ -234,25 +243,40 @@ export async function POST(req: NextRequest) {
 
   // El estado ya se escribió correctamente en PocketBase -- eso es lo que
   // importa para el orchestrator, y lo único que debe bloquear la respuesta
-  // HTTP. notifySubmissionResult() (en especial el email con adjuntos:
-  // baja 3 archivos de PocketBase + los sube al orchestrator + espera el
-  // envío SMTP real) puede tardar más que el timeout default de la función
-  // serverless -- si se hiciera de forma síncrona antes de responder, un
-  // resultado con archivos grandes corre el riesgo real de que Vercel mate
-  // la función a mitad de camino, sin loguear nada (confirmado: pasó con
-  // una submission real de ~330KB combinados, jul-2026 -- con archivos de
-  // prueba de ~1.5KB nunca se manifestó). Por eso se dispara en segundo
-  // plano con after(): la respuesta ya salió, y el runtime de Vercel
-  // mantiene la función viva el tiempo que haga falta para completarlo.
+  // HTTP. La notificación (en especial el email con adjuntos: baja 3
+  // archivos de PocketBase + los sube al orchestrator + espera el envío
+  // SMTP real) se delega a /api/internal/notify-submission -- una
+  // invocación de función SEPARADA con su propio presupuesto de tiempo.
+  // Nunca se ejecuta acá adentro: after() adelanta cuándo sale la
+  // respuesta, pero NO extiende el límite de duración de ESTA invocación,
+  // así que el trabajo lento seguía compitiendo por el mismo timeout y se
+  // cortaba de forma intermitente según la latencia de red del momento
+  // (confirmado en producción, jul-2026: dos submissions de tamaño casi
+  // idéntico, una llegó y la otra no). Acá solo se dispara el hand-off,
+  // que debería resolver rápido (el endpoint interno responde apenas
+  // encola su propio after()).
   after(async () => {
     try {
-      await notifySubmissionResult(
-        pb,
-        { ...submission, ...payload, id: submission.id } as SubmissionRecord,
-        status === "completed" ? "submission_completed" : "submission_failed",
-      );
+      const notifyUrl = new URL("/api/internal/notify-submission", req.nextUrl.origin);
+      const res = await fetch(notifyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Secret": env.RESULT_WEBHOOK_SECRET,
+        },
+        body: JSON.stringify({
+          submissionId: submission.id,
+          notificationType: status === "completed" ? "submission_completed" : "submission_failed",
+        }),
+      });
+      if (!res.ok) {
+        console.error(
+          "[webhooks/processing-result] /api/internal/notify-submission respondió",
+          res.status,
+        );
+      }
     } catch (e) {
-      console.error("[webhooks/processing-result] error notificando resultado:", e);
+      console.error("[webhooks/processing-result] error disparando notificación interna:", e);
     }
   });
 
