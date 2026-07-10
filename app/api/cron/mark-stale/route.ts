@@ -3,6 +3,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { getAdminPb } from "@/lib/pocketbase/admin";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW } from "@/lib/preview";
+import { notifySubmissionResult } from "@/lib/notify";
 import type { SubmissionHistoryEntry, SubmissionRecord } from "@/lib/pocketbase/types";
 
 /**
@@ -105,29 +106,21 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    // Mismo criterio que el webhook de cierre: la notificación se delega a
-    // /api/internal/notify-submission (invocación separada, su propio
-    // presupuesto de tiempo) en vez de llamar a notifySubmissionResult()
-    // acá adentro -- con un lote grande de submissions stale, hacerlo de
-    // forma síncrona en el loop (o incluso en el after() de ESTA
-    // invocación) podría exceder el timeout de la función del cron.
+    // notifySubmissionResult() ahora es liviana (ver comentario en el
+    // webhook de cierre): el envío real del email lo resuelve el backend
+    // en su propia invocación. after() la sigue corriendo en segundo
+    // plano por las dudas, con un lote grande de submissions stale.
     const submissionId = s.id;
+    const freshForNotify = fresh;
     after(async () => {
       try {
-        const notifyUrl = new URL("/api/internal/notify-submission", req.nextUrl.origin);
-        const res = await fetch(notifyUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Internal-Secret": env.RESULT_WEBHOOK_SECRET,
-          },
-          body: JSON.stringify({ submissionId, notificationType: "submission_timeout" }),
-        });
-        if (!res.ok) {
-          console.error("[cron/mark-stale] /api/internal/notify-submission respondió", res.status);
-        }
+        await notifySubmissionResult(
+          pb,
+          { ...freshForNotify, status: "failed", notified_at: nowIso } as SubmissionRecord,
+          "submission_timeout",
+        );
       } catch (e) {
-        console.error("[cron/mark-stale] error disparando notificación interna", submissionId, e);
+        console.error("[cron/mark-stale] no se pudo notificar", submissionId, e);
       }
     });
   }

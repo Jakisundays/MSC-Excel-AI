@@ -5,6 +5,7 @@ import { getAdminPb } from "@/lib/pocketbase/admin";
 import { verifyResultWebhookSignature } from "@/lib/webhooks/hmac";
 import { env } from "@/lib/env";
 import { DEV_PREVIEW } from "@/lib/preview";
+import { notifySubmissionResult } from "@/lib/notify";
 import type {
   SubmissionHistoryEntry,
   SubmissionRecord,
@@ -185,8 +186,8 @@ export async function POST(req: NextRequest) {
     payload.result_file_size = resultFile instanceof File ? resultFile.size : 0;
     // Nombre REAL del archivo (antes de que PocketBase lo mangle con un
     // sufijo aleatorio al guardarlo) -- necesario para adjuntarlo con su
-    // nombre correcto en el email de resultado (lib/mailer.ts::
-    // sendResultEmailWithAttachments).
+    // nombre correcto en el email de resultado (lo arma el orchestrator,
+    // ver POST /send-submission-email en verito).
     payload.result_file_name = resultFile instanceof File ? resultFile.name : "";
     // Limpia un `error` colgado de un intento anterior (ej. la submission
     // se reseteó a mano a "processing" para reintentar) -- un cierre
@@ -243,40 +244,22 @@ export async function POST(req: NextRequest) {
 
   // El estado ya se escribió correctamente en PocketBase -- eso es lo que
   // importa para el orchestrator, y lo único que debe bloquear la respuesta
-  // HTTP. La notificación (en especial el email con adjuntos: baja 3
-  // archivos de PocketBase + los sube al orchestrator + espera el envío
-  // SMTP real) se delega a /api/internal/notify-submission -- una
-  // invocación de función SEPARADA con su propio presupuesto de tiempo.
-  // Nunca se ejecuta acá adentro: after() adelanta cuándo sale la
-  // respuesta, pero NO extiende el límite de duración de ESTA invocación,
-  // así que el trabajo lento seguía compitiendo por el mismo timeout y se
-  // cortaba de forma intermitente según la latencia de red del momento
-  // (confirmado en producción, jul-2026: dos submissions de tamaño casi
-  // idéntico, una llegó y la otra no). Acá solo se dispara el hand-off,
-  // que debería resolver rápido (el endpoint interno responde apenas
-  // encola su propio after()).
+  // HTTP. notifySubmissionResult() ahora es liviana: el envío real del
+  // email (adjuntos, SMTP, reintentos) lo resuelve el backend (verito) en
+  // su propia invocación con BackgroundTasks -- acá solo se dispara un
+  // POST JSON chico (ver lib/mailer.ts::triggerSubmissionEmail), nunca se
+  // suben archivos. after() la corre en segundo plano de todos modos, por
+  // las dudas, pero ya no hay trabajo pesado que arriesgue el timeout de
+  // esta función.
   after(async () => {
     try {
-      const notifyUrl = new URL("/api/internal/notify-submission", req.nextUrl.origin);
-      const res = await fetch(notifyUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Internal-Secret": env.RESULT_WEBHOOK_SECRET,
-        },
-        body: JSON.stringify({
-          submissionId: submission.id,
-          notificationType: status === "completed" ? "submission_completed" : "submission_failed",
-        }),
-      });
-      if (!res.ok) {
-        console.error(
-          "[webhooks/processing-result] /api/internal/notify-submission respondió",
-          res.status,
-        );
-      }
+      await notifySubmissionResult(
+        pb,
+        { ...submission, ...payload, id: submission.id } as SubmissionRecord,
+        status === "completed" ? "submission_completed" : "submission_failed",
+      );
     } catch (e) {
-      console.error("[webhooks/processing-result] error disparando notificación interna:", e);
+      console.error("[webhooks/processing-result] error notificando resultado:", e);
     }
   });
 

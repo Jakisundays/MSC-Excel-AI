@@ -4,7 +4,7 @@ import type PocketBase from "pocketbase";
 
 import type { NotificationType, SubmissionRecord } from "@/lib/pocketbase/types";
 import { env } from "@/lib/env";
-import { sendMail, sendResultEmailWithAttachments, submissionResultEmailHtml } from "@/lib/mailer";
+import { submissionResultEmailHtml, triggerSubmissionEmail } from "@/lib/mailer";
 import { sendPushToUser } from "@/lib/push";
 
 /**
@@ -41,47 +41,33 @@ export async function notifySubmissionResult(
 
   try {
     const detailUrl = `${env.APP_URL}/historial/${submission.id}`;
+    const subject =
+      type === "submission_completed"
+        ? "Tu solicitud está lista"
+        : type === "submission_failed"
+          ? "Tu solicitud falló"
+          : "Tu solicitud tardó demasiado";
 
-    if (type === "submission_completed") {
-      // Cambio deliberado: a los destinatarios CONFIGURADOS por el usuario
-      // en "Nueva solicitud" (`submission.reply_to`), NO al dueño de la
-      // cuenta (`user.email`) -- con los 3 adjuntos (originales +
-      // resultado), ver lib/mailer.ts::sendResultEmailWithAttachments.
-      const result = await sendResultEmailWithAttachments({
-        to: submission.reply_to,
-        subject: "Tu solicitud está lista",
-        bodyHtml: submissionResultEmailHtml({
-          fileALabel: "Archivo A",
-          fileBLabel: "Archivo B",
-          type,
-          errorMessage: submission.error || undefined,
-          detailUrl,
-        }),
-        submission,
-      });
-      if (!result.ok) {
-        console.error(
-          `[notify] no se pudo enviar el email de resultado (con adjuntos) para submission ${submission.id}` +
-            (result.attached ? ` (attached=${JSON.stringify(result.attached)})` : ""),
-        );
-      }
-    } else {
-      // failed/timeout: sin cambios -- email genérico sin adjuntos al
-      // dueño de la cuenta, vía sendMail()/submissionResultEmailHtml().
-      const user = await pb.collection("users").getOne(submission.user);
-      const subject = type === "submission_failed" ? "Tu solicitud falló" : "Tu solicitud tardó demasiado";
-
-      await sendMail({
-        to: user.email,
-        subject,
-        html: submissionResultEmailHtml({
-          fileALabel: "Archivo A",
-          fileBLabel: "Archivo B",
-          type,
-          errorMessage: submission.error || undefined,
-          detailUrl,
-        }),
-      });
+    // A los destinatarios CONFIGURADOS por el usuario en "Nueva solicitud"
+    // (`submission.reply_to`), no al dueño de la cuenta -- mismo criterio
+    // para los 3 tipos. El envío real (adjuntos si corresponde, SMTP,
+    // reintentos) vive 100% en el backend (verito) -- ver
+    // lib/mailer.ts::triggerSubmissionEmail, que solo dispara el trigger
+    // con el HTML ya renderizado acá.
+    const dispatched = await triggerSubmissionEmail({
+      orchestratorRequestId: submission.orchestrator_request_id,
+      notificationType: type,
+      subject,
+      bodyHtml: submissionResultEmailHtml({
+        fileALabel: "Archivo A",
+        fileBLabel: "Archivo B",
+        type,
+        errorMessage: submission.error || undefined,
+        detailUrl,
+      }),
+    });
+    if (!dispatched) {
+      console.error(`[notify] no se pudo disparar el email para submission ${submission.id} (type=${type})`);
     }
   } catch (err) {
     console.error(
