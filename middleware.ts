@@ -40,7 +40,7 @@ export function middleware(req: NextRequest) {
 
   // Ya logueado y entrando a /login → al returnTo (si vino de una
   // invitación) o al dashboard.
-  if (pathname === "/login" && valid) {
+  if ((pathname === "/login" || pathname === "/registro") && valid) {
     const returnTo = req.nextUrl.searchParams.get("returnTo");
     const destination = isSafeReturnTo(returnTo) ? returnTo : "/dashboard";
     return NextResponse.redirect(new URL(destination, req.url));
@@ -66,6 +66,7 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     "/login",
+    "/registro",
     "/dashboard/:path*",
     "/nueva-solicitud/:path*",
     "/historial/:path*",

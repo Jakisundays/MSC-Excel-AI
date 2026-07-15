@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   Eye,
@@ -14,6 +14,7 @@ import {
   Mail,
   Sparkles,
   TriangleAlert,
+  User,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -26,32 +27,18 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { isValidEmail, isValidPassword, PASSWORD_MIN_LENGTH } from "@/lib/validators";
 
-type ErrorKind =
-  | "oauth"
-  | "auth"
-  | "not_allowed"
-  | "invalid_credentials"
-  | "rate_limited"
-  | "network";
+type ErrorKind = "invalid_input" | "registration_failed" | "rate_limited" | "network";
 
 const ERROR_COPY: Record<ErrorKind, { title: string; detail: string }> = {
-  oauth: {
-    title: "No pudimos iniciar el login con Google.",
-    detail: "Intentá de nuevo.",
+  invalid_input: {
+    title: "Revisá los datos ingresados.",
+    detail: "Completá todos los campos correctamente e intentá de nuevo.",
   },
-  auth: {
-    title: "Falló la autenticación con Google.",
-    detail: "Intentá de nuevo o usá otra cuenta.",
-  },
-  not_allowed: {
-    title: "Tu cuenta no tiene acceso a esta herramienta.",
-    detail:
-      "Es de uso interno del equipo. Escribile a soporte si creés que es un error.",
-  },
-  invalid_credentials: {
-    title: "Correo o contraseña incorrectos.",
-    detail: "Verificá tus datos e intentá de nuevo.",
+  registration_failed: {
+    title: "No pudimos crear tu cuenta.",
+    detail: "¿Ya tenés una cuenta? Iniciá sesión en vez de registrarte.",
   },
   rate_limited: {
     title: "Demasiados intentos.",
@@ -64,9 +51,8 @@ const ERROR_COPY: Record<ErrorKind, { title: string; detail: string }> = {
 };
 
 /** `data.error` viene del servidor sin garantía estática de que sea una
- * clave conocida (ej. un código nuevo agregado del lado de una ruta sin
- * actualizar este mapa) -- nunca indexar ERROR_COPY directo con un valor
- * no validado, cae a "network" en vez de romper el render. */
+ * clave conocida -- nunca indexar ERROR_COPY directo con un valor no
+ * validado, cae a "network" en vez de romper el render. */
 function errorCopyFor(kind: ErrorKind): { title: string; detail: string } {
   return ERROR_COPY[kind] ?? ERROR_COPY.network;
 }
@@ -95,69 +81,92 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function LoginView({
-  oauthError,
-  returnTo,
-}: {
-  oauthError: ErrorKind | null;
-  returnTo: string | null;
-}) {
+export function RegistroView() {
   const router = useRouter();
-  const googleHref = returnTo
-    ? `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`
-    : "/api/auth/login";
 
-  const [pending, setPending] = useState<"google" | "credentials" | null>(null);
+  const [pending, setPending] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [error, setError] = useState<ErrorKind | null>(oauthError);
+  const [error, setError] = useState<ErrorKind | null>(null);
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [touched, setTouched] = useState({ email: false, password: false });
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [touched, setTouched] = useState({
+    name: false,
+    email: false,
+    password: false,
+    confirmPassword: false,
+  });
 
-  const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const nameError =
+    touched.name && !name.trim() ? "Ingresá tu nombre." : null;
   const emailError = touched.email
     ? !email.trim()
       ? "Ingresá tu correo electrónico."
-      : !validEmail(email)
+      : !isValidEmail(email)
         ? "Ingresá un correo electrónico válido."
         : null
     : null;
-  const passwordError =
-    touched.password && !password ? "Ingresá tu contraseña." : null;
+  const passwordError = touched.password
+    ? !password
+      ? "Ingresá una contraseña."
+      : !isValidPassword(password)
+        ? `Mínimo ${PASSWORD_MIN_LENGTH} caracteres, con letras y números.`
+        : null
+    : null;
+  const confirmPasswordError = touched.confirmPassword
+    ? !confirmPassword
+      ? "Confirmá tu contraseña."
+      : confirmPassword !== password
+        ? "Las contraseñas no coinciden."
+        : null
+    : null;
 
-  const anyLoading = pending !== null;
+  const anyLoading = pending;
+  const firstName = name.trim().split(/\s+/)[0] || "";
 
-  async function onSubmitCredentials(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setTouched({ email: true, password: true });
-    if (!validEmail(email) || !password) return;
+    setTouched({ name: true, email: true, password: true, confirmPassword: true });
+    if (
+      !name.trim() ||
+      !isValidEmail(email) ||
+      !isValidPassword(password) ||
+      confirmPassword !== password
+    ) {
+      return;
+    }
 
     setError(null);
-    setPending("credentials");
+    setPending(true);
     try {
-      const res = await fetch("/api/auth/login-password", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email,
+          password,
+          passwordConfirm: confirmPassword,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         setError((data.error as ErrorKind) ?? "network");
-        setPending(null);
+        setPending(false);
         return;
       }
-      setFirstName(typeof data.name === "string" ? data.name : "");
       setSuccess(true);
       setTimeout(() => {
-        router.push(returnTo || "/dashboard");
+        router.push("/empresa/equipo");
         router.refresh();
       }, 550);
     } catch {
       setError("network");
-      setPending(null);
+      setPending(false);
     }
   }
 
@@ -178,10 +187,10 @@ export function LoginView({
 
         <div className="relative">
           <div className="text-brand-panel-foreground/45 mb-4 text-[11px] font-medium tracking-wider uppercase">
-            Herramienta interna · equipo
+            14 días de prueba gratis
           </div>
           <h1 className="max-w-[15ch] text-3xl leading-[1.1] font-medium tracking-tight lg:text-4xl">
-            Procesá tus archivos Excel con IA, sin fricción.
+            Creá tu cuenta y procesá tus Excel con IA.
           </h1>
           <p className="text-brand-panel-foreground/62 mt-4 max-w-[38ch] text-[14.5px] leading-relaxed">
             Subís los Excel, elegís las hojas y sumás los correos. Los
@@ -231,20 +240,19 @@ export function LoginView({
                 <CheckCircle2 className="size-7" aria-hidden />
               </div>
               <h1 className="text-xl font-medium tracking-tight">
-                {firstName ? `¡Bienvenida, ${firstName}!` : "¡Sesión iniciada!"}
+                {firstName ? `¡Listo, ${firstName}!` : "¡Cuenta creada!"}
               </h1>
               <p className="text-muted-foreground mt-2.5 text-sm">
-                Te llevamos al panel…
+                Te llevamos a tu equipo…
               </p>
             </div>
           ) : (
             <div className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl bg-card p-6 ring-1 ring-foreground/10 shadow-xl duration-300 sm:p-8 max-md:rounded-none max-md:bg-transparent max-md:p-0 max-md:shadow-none max-md:ring-0">
               <h1 className="text-xl font-medium tracking-tight md:text-[23px]">
-                Iniciar sesión
+                Crear cuenta
               </h1>
               <p className="text-muted-foreground mt-2 mb-6 text-[13.5px] leading-relaxed">
-                Entrá con tu cuenta de Google corporativa o con tu correo y
-                contraseña.
+                Registrate con tu correo y contraseña para empezar.
               </p>
 
               {error && (
@@ -262,61 +270,41 @@ export function LoginView({
                 </div>
               )}
 
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="h-12 w-full rounded-full text-[15px]"
-                disabled={anyLoading}
-              >
-                <a
-                  href={googleHref}
-                  aria-disabled={anyLoading}
-                  onClick={(e) => {
-                    if (anyLoading) {
-                      e.preventDefault();
-                      return;
-                    }
-                    setPending("google");
-                  }}
-                >
-                  {pending === "google" ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden />
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-                      <path
-                        fill="#4285F4"
-                        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.49h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.63Z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M3.97 10.72a5.41 5.41 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"
-                      />
-                    </svg>
-                  )}
-                  {pending === "google" ? "Conectando…" : "Continuar con Google"}
-                </a>
-              </Button>
-
-              <div className="my-5 flex items-center gap-3">
-                <span className="bg-border h-px flex-1" />
-                <span className="text-muted-foreground text-[11.5px] whitespace-nowrap">
-                  o con tu correo
-                </span>
-                <span className="bg-border h-px flex-1" />
-              </div>
-
-              <form onSubmit={onSubmitCredentials} noValidate className="flex flex-col gap-4">
+              <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
                 <div>
-                  <Label htmlFor="login-email" className="mb-2">
+                  <Label htmlFor="registro-name" className="mb-2">
+                    Nombre completo
+                  </Label>
+                  <InputGroup className="h-12 rounded-xl">
+                    <InputGroupAddon>
+                      <User className="size-4" aria-hidden />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      id="registro-name"
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Tu nombre completo"
+                      value={name}
+                      disabled={anyLoading}
+                      aria-invalid={!!nameError}
+                      aria-describedby="registro-name-error"
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                    />
+                  </InputGroup>
+                  {nameError && (
+                    <div
+                      id="registro-name-error"
+                      className="text-destructive mt-1.5 flex items-center gap-1.5 text-xs"
+                    >
+                      <TriangleAlert className="size-3.5" aria-hidden />
+                      {nameError}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="registro-email" className="mb-2">
                     Correo electrónico
                   </Label>
                   <InputGroup className="h-12 rounded-xl">
@@ -324,23 +312,21 @@ export function LoginView({
                       <Mail className="size-4" aria-hidden />
                     </InputGroupAddon>
                     <InputGroupInput
-                      id="login-email"
+                      id="registro-email"
                       type="email"
-                      autoComplete="username"
+                      autoComplete="email"
                       placeholder="vos@msc.com"
                       value={email}
                       disabled={anyLoading}
                       aria-invalid={!!emailError}
-                      aria-describedby="login-email-error"
+                      aria-describedby="registro-email-error"
                       onChange={(e) => setEmail(e.target.value)}
-                      onBlur={() =>
-                        setTouched((t) => ({ ...t, email: true }))
-                      }
+                      onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                     />
                   </InputGroup>
                   {emailError && (
                     <div
-                      id="login-email-error"
+                      id="registro-email-error"
                       className="text-destructive mt-1.5 flex items-center gap-1.5 text-xs"
                     >
                       <TriangleAlert className="size-3.5" aria-hidden />
@@ -350,33 +336,24 @@ export function LoginView({
                 </div>
 
                 <div>
-                  <div className="mb-2 flex items-baseline justify-between">
-                    <Label htmlFor="login-password">Contraseña</Label>
-                    <a
-                      href="#"
-                      onClick={(e) => e.preventDefault()}
-                      className="text-primary text-xs font-medium hover:underline"
-                    >
-                      ¿Olvidaste tu contraseña?
-                    </a>
-                  </div>
+                  <Label htmlFor="registro-password" className="mb-2">
+                    Contraseña
+                  </Label>
                   <InputGroup className="h-12 rounded-xl">
                     <InputGroupAddon>
                       <Lock className="size-4" aria-hidden />
                     </InputGroupAddon>
                     <InputGroupInput
-                      id="login-password"
+                      id="registro-password"
                       type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
+                      autoComplete="new-password"
                       placeholder="••••••••"
                       value={password}
                       disabled={anyLoading}
                       aria-invalid={!!passwordError}
-                      aria-describedby="login-password-error"
+                      aria-describedby="registro-password-error"
                       onChange={(e) => setPassword(e.target.value)}
-                      onBlur={() =>
-                        setTouched((t) => ({ ...t, password: true }))
-                      }
+                      onBlur={() => setTouched((t) => ({ ...t, password: true }))}
                     />
                     <InputGroupAddon align="inline-end">
                       <InputGroupButton
@@ -398,11 +375,64 @@ export function LoginView({
                   </InputGroup>
                   {passwordError && (
                     <div
-                      id="login-password-error"
+                      id="registro-password-error"
                       className="text-destructive mt-1.5 flex items-center gap-1.5 text-xs"
                     >
                       <TriangleAlert className="size-3.5" aria-hidden />
                       {passwordError}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="registro-confirm-password" className="mb-2">
+                    Confirmar contraseña
+                  </Label>
+                  <InputGroup className="h-12 rounded-xl">
+                    <InputGroupAddon>
+                      <Lock className="size-4" aria-hidden />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      id="registro-confirm-password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      disabled={anyLoading}
+                      aria-invalid={!!confirmPasswordError}
+                      aria-describedby="registro-confirm-password-error"
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onBlur={() =>
+                        setTouched((t) => ({ ...t, confirmPassword: true }))
+                      }
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        type="button"
+                        size="icon-xs"
+                        aria-label={
+                          showConfirmPassword
+                            ? "Ocultar contraseña"
+                            : "Mostrar contraseña"
+                        }
+                        disabled={anyLoading}
+                        onClick={() => setShowConfirmPassword((v) => !v)}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="size-4" aria-hidden />
+                        ) : (
+                          <Eye className="size-4" aria-hidden />
+                        )}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {confirmPasswordError && (
+                    <div
+                      id="registro-confirm-password-error"
+                      className="text-destructive mt-1.5 flex items-center gap-1.5 text-xs"
+                    >
+                      <TriangleAlert className="size-3.5" aria-hidden />
+                      {confirmPasswordError}
                     </div>
                   )}
                 </div>
@@ -413,27 +443,22 @@ export function LoginView({
                   className="mt-0.5 h-12 w-full rounded-full text-[15px]"
                   disabled={anyLoading}
                 >
-                  {pending === "credentials" && (
-                    <Loader2 className="size-4 animate-spin" aria-hidden />
-                  )}
-                  {pending === "credentials" ? "Verificando…" : "Iniciar sesión"}
+                  {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                  {pending ? "Creando cuenta…" : "Crear cuenta"}
                 </Button>
               </form>
-
-              <p className="text-muted-foreground mt-5 text-center text-xs">
-                ¿No tenés cuenta?{" "}
-                <Link
-                  href="/registro"
-                  className="text-primary text-xs font-medium hover:underline"
-                >
-                  Creá una
-                </Link>
-              </p>
 
               <div className="text-muted-foreground mt-6 flex items-center gap-1.5 text-[11.5px]">
                 <Lock className="size-3.5" aria-hidden />
                 Conexión segura
               </div>
+
+              <p className="text-muted-foreground mt-4 text-center text-[13px]">
+                ¿Ya tenés cuenta?{" "}
+                <Link href="/login" className="text-primary font-medium hover:underline">
+                  Iniciá sesión
+                </Link>
+              </p>
             </div>
           )}
         </div>

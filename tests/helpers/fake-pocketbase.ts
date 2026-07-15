@@ -115,3 +115,65 @@ export function baseSubmission(
     ...overrides,
   };
 }
+
+/**
+ * Doble de PocketBase para tests de integración de app/api/auth/register:
+ * solo implementa collection("users").create()/impersonate(), que es lo
+ * único que esa ruta usa del cliente admin. No reimplementa el SDK real.
+ * Usa la clase real ClientResponseError (del paquete "pocketbase", no
+ * mockeado) para que los `instanceof ClientResponseError` de la ruta
+ * sigan funcionando -- el caller pasa esa instancia en `createError`.
+ */
+export function makeFakeUsersAdminPb(
+  opts: {
+    /** Si se da, create() rechaza con este error en vez de crear el user
+     * (p. ej. `new ClientResponseError({ status: 400, ... })` para
+     * simular email duplicado). */
+    createError?: unknown;
+    /** Si se da, impersonate() rechaza con este error en vez de devolver
+     * una sesión. */
+    impersonateError?: unknown;
+    /** id que create() asigna al record creado. */
+    createdId?: string;
+    /** record que trae el authStore de la sesión que devuelve impersonate(). */
+    impersonatedRecord?: Record<string, unknown>;
+    /** token que trae el authStore de la sesión que devuelve impersonate(). */
+    impersonatedToken?: string;
+  } = {},
+) {
+  const createCalls: Array<Record<string, unknown>> = [];
+  const impersonateCalls: Array<{ id: string; duration: number }> = [];
+
+  const pb = {
+    collection(name: string) {
+      if (name !== "users") {
+        throw new Error(`fake pb: colección no soportada: ${name}`);
+      }
+      return {
+        async create(payload: Record<string, unknown>) {
+          createCalls.push(payload);
+          if (opts.createError) throw opts.createError;
+          return { id: opts.createdId ?? "user-new-1", ...payload };
+        },
+        async impersonate(id: string, duration: number) {
+          impersonateCalls.push({ id, duration });
+          if (opts.impersonateError) throw opts.impersonateError;
+          const lastCreate = createCalls.at(-1);
+          const record = opts.impersonatedRecord ?? {
+            id,
+            name: (lastCreate?.name as string) ?? "",
+            email: (lastCreate?.email as string) ?? "",
+          };
+          return {
+            authStore: {
+              token: opts.impersonatedToken ?? "pb-impersonation-token",
+              record,
+            },
+          };
+        },
+      };
+    },
+  };
+
+  return { pb, createCalls, impersonateCalls };
+}
